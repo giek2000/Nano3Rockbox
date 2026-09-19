@@ -1,0 +1,247 @@
+/***************************************************************************
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
+ *
+ * Copyright (c) 2010 Thomas Martitz
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+ * KIND, either express or implied.
+ *
+ ****************************************************************************/
+
+#include <jni.h>
+#include <stdbool.h>
+#define _SYSTEM_WITH_JNI /* for getJavaEnvironment */
+#include <pthread.h>
+#include "system.h"
+#include "kernel.h"
+#include "debug.h"
+#include "pcm.h"
+#include "pcm-internal.h"
+#include "pcm_sampr.h"
+#include "pcm_sink.h"
+#include "audiohw.h"
+
+extern JNIEnv *env_ptr;
+
+/* infos about our pcm chunks */
+static const void *pcm_data_start;
+static size_t  pcm_data_size;
+static int     audio_locked = 0;
+static pthread_mutex_t audio_lock_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/* cache frequently called methods */
+static jmethodID play_pause_method;
+static jmethodID stop_method;
+static jmethodID set_volume_method;
+static jmethodID write_method;
+static jclass    RockboxPCM_class;
+static jobject   RockboxPCM_instance;
+
+
+/*
+ * mutex lock/unlock wrappers neatness' sake
+ */
+static inline void lock_audio(void)
+{
+    pthread_mutex_lock(&audio_lock_mutex);
+}
+
+static inline void unlock_audio(void)
+{
+    pthread_mutex_unlock(&audio_lock_mutex);
+}
+
+/*
+ * write pcm samples to the hardware. Calls AudioTrack.write directly (which
+ * is usually a blocking call)
+ *
+ * temp_array is not strictly needed as a parameter as we could
+ * create it here, but that would result in frequent garbage collection
+ *
+ * it is called from the PositionMarker callback of AudioTrack
+ **/
+JNIEXPORT jint JNICALL
+Java_org_rockbox_RockboxPCM_nativeWrite(JNIEnv *env, jobject this,
+                                        jbyteArray temp_array, jint max_size)
+{
+    bool new_buffer = false;
+
+    lock_audio();
+
+    jint left = max_size;
+
+    if (!pcm_data_size) /* get some initial data */
+    {
+        new_buffer = pcm_play_dma_complete_callback(PCM_DMAST_OK,
+                            &pcm_data_start, &pcm_data_size);
+    }
+
+    while(left > 0 && pcm_data_size)
+    {
+        jint ret;
+        jsize transfer_size = MIN((size_t)left, pcm_data_size);
+        /* decrement both by the amount we're going to write */
+        pcm_data_size -= transfer_size; left -= transfer_size;
+        (*env)->SetByteArrayRegion(env, temp_array, 0,
+                                        transfer_size, (jbyte*)pcm_data_start);
+
+        if (new_buffer)
+        {
+            new_buffer = false;
+            pcm_play_dma_status_callback(PCM_DMAST_STARTED);
+        }
+        /* SetByteArrayRegion copies, which enables us to unlock audio. This
+         * is good because the below write() call almost certainly block.
+         * This allows the mixer to be clocked at a regular interval which vastly
+         * improves responsiveness when pausing/stopping playback */
+        unlock_audio();
+        ret = (*env)->CallIntMethod(env, this, write_method,
+                                            temp_array, 0, transfer_size);
+        lock_audio();
+
+        /* check if still playing. might have changed during the write() call */
+        if (!pcm_is_playing())
+            break;
+
+        if (ret < 0)
+        {
+            unlock_audio();
+            return ret;
+        }
+
+        if (pcm_data_size == 0) /* need new data */
+        {
+            new_buffer = pcm_play_dma_complete_callback(PCM_DMAST_OK,
+                                &pcm_data_start, &pcm_data_size);
+        }
+        else /* increment data pointer and feed more */
+            pcm_data_start += transfer_size;
+    }
+
+    if (new_buffer)
+        pcm_play_dma_status_callback(PCM_DMAST_STARTED);
+
+    unlock_audio();
+    return max_size - left;
+}
+
+static void sink_lock(void)
+{
+    if (++audio_locked == 1)
+        lock_audio();
+}
+
+static void sink_unlock(void)
+{
+    if (--audio_locked == 0)
+        unlock_audio();
+}
+
+static void sink_set_freq(uint16_t freq)
+{
+    (void)freq;
+}
+
+static void sink_dma_start(const void *addr, size_t size)
+{
+    pcm_data_start = addr;
+    pcm_data_size = size;
+
+    (*env_ptr)->CallVoidMethod(env_ptr,
+                               RockboxPCM_instance,
+                               play_pause_method,
+                               0);
+}
+
+static void sink_dma_stop(void)
+{
+    /* NOTE: due to how pcm_play_dma_complete_callback() works, this is
+     * possibly called from nativeWrite(), i.e. another (host) thread
+     * => need to discover the appropriate JNIEnv* */
+    JNIEnv* env = getJavaEnvironment();
+    (*env)->CallVoidMethod(env,
+                           RockboxPCM_instance,
+                           stop_method);
+}
+
+static void sink_dma_init(void)
+{
+    /* in order to have background music playing after leaving the activity,
+     * we need to allocate the PCM object from the Rockbox thread (the Activity
+     * runs in a separate thread because it would otherwise kill us when
+     * stopping it)
+     *
+     * Luckily we only reference the PCM object from here, so it's safe (and
+     * clean) to allocate it here
+     **/
+    JNIEnv e = *env_ptr;
+    /* get the class and its constructor */
+    RockboxPCM_class = e->FindClass(env_ptr, "org/rockbox/RockboxPCM");
+    jmethodID constructor = e->GetMethodID(env_ptr, RockboxPCM_class, "<init>", "()V");
+    /* instance = new RockboxPCM() */
+    RockboxPCM_instance = e->NewObject(env_ptr, RockboxPCM_class, constructor);
+    /* cache needed methods */
+    play_pause_method = e->GetMethodID(env_ptr, RockboxPCM_class, "play_pause", "(Z)V");
+    set_volume_method = e->GetMethodID(env_ptr, RockboxPCM_class, "set_volume", "(I)V");
+    stop_method       = e->GetMethodID(env_ptr, RockboxPCM_class, "stop", "()V");
+    write_method      = e->GetMethodID(env_ptr, RockboxPCM_class, "write", "([BII)I");
+}
+
+static void sink_dma_postinit(void)
+{
+}
+
+void pcm_set_mixer_volume(int volume)
+{
+    (*env_ptr)->CallVoidMethod(env_ptr, RockboxPCM_instance, set_volume_method, volume);
+}
+
+/*
+ * release audio resources */
+void pcm_shutdown(void)
+{
+    JNIEnv e = *env_ptr;
+    jmethodID release = e->GetMethodID(env_ptr, RockboxPCM_class, "release", "()V");
+    e->CallVoidMethod(env_ptr, RockboxPCM_instance, release);
+    pthread_mutex_destroy(&audio_lock_mutex);
+}
+
+struct pcm_sink builtin_pcm_sink = {
+    .caps = {
+        .samprs       = hw_freq_sampr,
+        .num_samprs   = HW_NUM_FREQ,
+        .default_freq = HW_FREQ_DEFAULT,
+        .volume_type  = PCM_NATIVE_VOLUME_TYPE,
+    },
+    .ops = {
+        .init     = sink_dma_init,
+        .postinit = sink_dma_postinit,
+        .set_freq = sink_set_freq,
+        .lock     = sink_lock,
+        .unlock   = sink_unlock,
+        .play     = sink_dma_start,
+        .stop     = sink_dma_stop,
+    },
+};
+
+JNIEXPORT void JNICALL
+Java_org_rockbox_RockboxPCM_postVolumeChangedEvent(JNIEnv *env,
+                                                   jobject this,
+                                                   jint volume)
+{
+    (void) env;
+    (void) this;
+    /* for the main queue, the volume will be available through
+     * button_get_data() */
+    queue_broadcast(SYS_VOLUME_CHANGED, volume);
+}

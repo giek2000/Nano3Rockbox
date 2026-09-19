@@ -1,0 +1,72 @@
+sha1.c
+gcc-support.c
+pluginlib_actions.c
+action_helper.c
+button_helper.c
+helper.c
+icon_helper.c
+arg_helper.c
+md5.c
+jhash.c
+configfile.c
+playback_control.c
+rgb_hsv.c
+highscore.c
+simple_viewer.c
+display_text.c
+printcell_helper.c
+stdio_compat.c
+
+#if (LCD_DEPTH < 4)
+grey_core.c
+grey_draw.c
+grey_parm.c
+grey_scroll.c
+
+#ifdef CPU_COLDFIRE
+grey_coldfire.S
+#endif
+
+#endif /* LCD_DEPTH < 4 */
+
+overlay.c
+
+#ifdef RB_PROFILE
+profile_plugin.c
+#endif
+
+#ifdef CPU_ARM
+pluginlib_jpeg_idct_arm.S
+#endif
+
+pluginlib_jpeg_mem.c
+pluginlib_resize.c
+
+#ifndef HAVE_JPEG
+pluginlib_jpeg_load.c
+#endif
+
+checkbox.c
+osd.c
+picture.c
+xlcd_core.c
+xlcd_draw.c
+xlcd_scroll.c
+pluginlib_bmp.c
+read_image.c
+
+#ifdef HAVE_LCD_COLOR
+bmp_smooth_scale.c
+#endif
+
+#if !defined(HAVE_ALBUMART) || !defined(HAVE_JPEG)
+pluginlib_albumart.c
+#endif
+
+kbd_helper.c
+
+#ifdef HAVE_TOUCHSCREEN
+pluginlib_touchscreen.c
+#endif
+
+mul_id3.c

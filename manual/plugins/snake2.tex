@@ -1,0 +1,50 @@
+\subsection{Snake 2}
+\screenshot{plugins/images/ss-snake2}
+{Snake 2 {--} The Snake Strikes Back}{img:snake2}
+
+Another version of the Snake game. Move the snake around, and eat the
+apples that pop up on the screen. Each time an apple is eaten, the
+snake gets longer. The game ends when the snake hits a wall, or runs
+into itself.
+
+\begin{btnmap}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IAUDIO_X5_PAD%
+        ,SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,SANSA_M200_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD,MROBE100_PAD%
+        ,SANSA_FUZE_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD,RG_NANO_PAD}
+        {\ButtonUp{} / \ButtonDown{} / \ButtonLeft{} / \ButtonRight}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonMenu{} / \ButtonPlay{} / \ButtonLeft{} / \ButtonRight}
+    \opt{IRIVER_H10_PAD}{\ButtonScrollUp{} / \ButtonScrollDown{} / \ButtonLeft{} / \ButtonRight}
+    \opt{COWON_D2_PAD}{\TouchTopMiddle{} / \TouchBottomMiddle / \TouchMidLeft{} / \TouchMidRight}
+    \opt{MPIO_HD300_PAD}{\ButtonRew / \ButtonFF / \ButtonScrollUp / \ButtonScrollDown}
+    \opt{XDUOO_X3_PAD}{\ButtonPrev / \ButtonNext / \ButtonHome / \ButtonOption}
+  \opt{HAVEREMOTEKEYMAP}{& }
+        & Steer the snake\\
+    \opt{PBELL_VIBE500_PAD,MPIO_HD300_PAD,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD%
+        ,SAMSUNG_YH820_PAD}{\ButtonPlay}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOn}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD,IAUDIO_X5_PAD,SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,SANSA_M200_PAD%
+        ,GIGABEAT_PAD,GIGABEAT_S_PAD,MROBE100_PAD,SANSA_FUZE_PAD}
+        {\ButtonSelect}
+    \opt{IRIVER_H10_PAD}{\ButtonFF}
+    \opt{COWON_D2_PAD}{\TouchCenter}
+    \opt{XDUOO_X3_PAD}{\ButtonPlay}
+  \opt{HAVEREMOTEKEYMAP}{& }
+  \opt{RG_NANO_PAD}{\ButtonA}
+        & Pause and resume the game\\
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOff}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{Long \ButtonSelect}
+    \opt{IAUDIO_X5_PAD,IRIVER_H10_PAD,SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,SANSA_M200_PAD,GIGABEAT_PAD%
+        ,MROBE100_PAD,COWON_D2_PAD,SANSA_FUZEPLUS_PAD,XDUOO_X3_PAD}{\ButtonPower}
+    \opt{SANSA_FUZE_PAD}{Long \ButtonHome}
+    \opt{GIGABEAT_S_PAD}{\ButtonBack}
+    \opt{PBELL_VIBE500_PAD}{\ButtonRec}
+    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRew}
+    \opt{MPIO_HD300_PAD}{Long \ButtonMenu}
+  \opt{HAVEREMOTEKEYMAP}{& }
+  \opt{RG_NANO_PAD}{\ButtonStart}
+        & Quit\\
+\end{btnmap}
+
+In game A, the maze stays the same, in game B
+after an increasing number of apples eaten the maze is replaced by a
+new one.

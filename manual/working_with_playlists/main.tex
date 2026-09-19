@@ -1,0 +1,145 @@
+\section{\label{ref:working_with_playlists}Working with Playlists}
+
+\subsection{Creating playlists}
+
+\subsubsection{By selecting a song for playback}
+When a song is selected from the \setting{File Browser} or \setting{Database} by pressing
+\ActionTreeEnter, Rockbox will automatically create a playlist containing all of the
+listed songs and will start playback.
+
+\note{Playing a new song will clear the current playlist. If you want to \emph{add}
+      a song to it instead, see \reference{ref:playingnext_submenu} on how to choose
+      what's playing next.}
+
+\subsubsection{By choosing ``Play`` or ``Play Shuffled`` from ``Playing Next...``}
+Replaces current playlist with the selected tracks.
+
+\subsubsection{\label{ref:addtoplaylist_submenu}By choosing  ``Add to Playlist...``}
+Choose \setting{Add to Playlist...} from the \setting{Context Menu} to
+add selected track(s) or directory to a new or existing playlist that is not currently
+playing.
+
+\note{Playlists are stored in \fname{/Playlists} by default.
+  The default playlist directory can be changed (see \reference{ref:Contextmenu}).}
+
+\subsubsection{By using the Main Menu}
+To create a playlist containing some or all of the music on your \dap{}, you can use the
+\setting{Create Playlist} command in the \setting{Playlists Context Menu}
+(see \reference{ref:playlistcatalogue_contextmenu}).
+
+\subsection{Choosing what's playing next}
+
+\subsubsection{\label{ref:playingnext_submenu}Adding music to the current playlist}
+\screenshot{rockbox_interface/images/ss-playlist-menu}{Playing Next...}{}
+\setting{Playing Next...} is a submenu in the \setting{Context Menu} (see
+\reference{ref:Contextmenu}) that can be invoked on a selection of tracks in various
+places, such as the File Browser, Database, or even PictureFlow:
+
+\begin{description}
+\item [Play Next.] Track(s) will play immediately after the currently playing track.
+
+\item [Add.] Add track(s) after the most recently added tracks or, if tracks
+have not been added yet, immediately after the currently playing track.
+
+\item [Play Last.] Add track(s) to the end of the playlist.
+
+\item [Add Shuffled.] Add track(s) to the playlist at random positions.
+
+\item [Play Last Shuffled.] Add tracks in a random order to the end of the playlist.
+\end{description}
+
+To replace the current playlist with your selection, choose:
+
+\begin{description}
+\item [Play.] Replace all entries in the current playlist with the selected
+  tracks. If \setting{Keep Current Track When Replacing Playlist} is set to
+  \setting{Yes}, the new tracks will play after the current track finishes
+  playing; if no track is playing or the setting is \setting{No}, the new
+  tracks will begin playing immediately.
+
+\item [Play Shuffled.] Similar, except the tracks will be added to the new
+  playlist in random order.
+\end{description}
+
+\label{ref:queuing}The following options are hidden by default, due to their
+more complicated behavior. Queued tracks are temporarily added to the current
+playlist, but are automatically removed as soon as the tracks have been played.
+Queued tracks will not be saved to a playlist file.
+A current playlist containing queued tracks can not be bookmarked, even after saving it,
+unless you confirm the tracks' removal first (see \reference{ref:createbookmark}).
+
+\begin{description}
+\item [Queue Next.] Corresponds to \setting{Play Next}.
+
+\item [Queue.] Corresponds to \setting{Add}.
+
+\item [Queue Last.] Corresponds to \setting{Play Last}.
+
+\item [Queue Shuffled.] Corresponds to \setting{Add Shuffled}.
+
+\item [Queue Last Shuffled.] Corresponds to \setting{Play Last Shuffled}.
+\end{description}
+
+\note{Visibility of options to add shuffled tracks or to queue tracks can be toggled by going to
+\setting{Settings} $\rightarrow$ \setting{General Settings} $\rightarrow$ \setting{Playlists}
+$\rightarrow$ \setting{Current Playlist}. Select either \setting{Show Shuffled Adding Options}
+or \setting{Show Queue Options} to customize the displayed set of options.}
+
+If \setting{Playing Next...} is invoked on a directory, Rockbox adds all of the tracks in
+that directory to the playlist.
+
+\note{You can control whether or not Rockbox includes the contents of
+  subdirectories when adding an entire directory to a playlist. Set the
+  \setting{Settings $\rightarrow$ General Settings $\rightarrow$ Playlist
+  $\rightarrow$ Recursively Insert Directories} setting to \setting{Yes} if
+  you would like Rockbox to include tracks in subdirectories as well as tracks
+  in the currently-selected directory.}
+
+The Current playlist is saved, so resume will restore it exactly as it
+was before shutdown.
+
+\note{To view, save, reshuffle, or display the play time of the current
+  playlist use the
+  \setting{Current Playlist} sub menu in the WPS context menu.}
+
+\subsection{Modifying playlists}
+\subsubsection{Reshuffling}
+Reshuffling the current playlist is easily done from the \setting{Current Playlist}
+sub menu in the WPS.
+
+\subsubsection{Moving and removing tracks}
+To move or remove a track from the current playlist, enter the
+\setting{Playlist Viewer} by selecting \setting{View Current Playlist} in the
+\setting{Current Playlist} submenu in the WPS context menu.
+Once in the \setting{Playlist Viewer} open the context menu on the track you
+want to move or remove. If you want to move the track, select \setting{Move} in
+the context menu and then move the blinking cursor to the place where you want
+the track to be moved and confirm with \ActionStdOk. To remove a track, simply
+select \setting{Remove} in the context menu.
+
+\subsection{Saving playlists}
+To save the current playlist, either enter the \setting{Current Playlist} submenu
+in the \setting{WPS Context Menu} (see \reference{sec:contextmenu}) and
+select \setting{Save Current Playlist}, or enter the context menu for
+\setting{Playlists} in the \setting{Main Menu} and select
+\setting{Save Current Playlist}.
+Either method will bring you to the \setting{Virtual Keyboard} (see
+\reference{sec:virtual_keyboard}), enter a filename for your playlist and
+accept it. If the current playlist contains any queued tracks, you will be
+asked whether to remove them, as a prerequisiste for creating bookmarks
+(see \reference{ref:createbookmark}).
+
+\subsection{Loading saved playlists}
+\subsubsection{Through the \setting{File Browser}}
+Playlist files, like regular music tracks, can be selected through the
+\setting{File Browser}. When loading a playlist from disk it will replace
+the current playlist. If you want to look at a playlist's
+content without starting playback immediately, access the \setting{Context Menu} (see
+\reference{ref:Contextmenu}) with \ActionStdContext{} and choose \setting{View}.
+
+\subsubsection{Through \setting{Playlists}}
+\setting{Playlists} offers a shortcut to all playlists in your
+\daps{} specified playlist directory.
+It can be used like the \setting{File Browser} but will display
+the content of a playlist when one is selected.
+

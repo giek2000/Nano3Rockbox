@@ -1,0 +1,5 @@
+default_icons.bmp
+
+#if (CONFIG_PLATFORM & PLATFORM_HOSTED) && defined(__APPLE__)
+osx_dummy.bmp
+#endif

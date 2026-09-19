@@ -1,0 +1,649 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>RbUtilQtFrm</class>
+ <widget class="QMainWindow" name="RbUtilQtFrm">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>631</width>
+    <height>441</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Rockbox Utility</string>
+  </property>
+  <property name="windowIcon">
+   <iconset resource="rbutilqt.qrc">
+    <normaloff>:/icons/rockbox-clef.svg</normaloff>:/icons/rockbox-clef.svg</iconset>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout_3">
+    <item row="0" column="1">
+     <widget class="QSvgWidget" name="logoLabel" native="true">
+      <property name="minimumSize">
+       <size>
+        <width>200</width>
+        <height>62</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>200</width>
+        <height>62</height>
+       </size>
+      </property>
+      <property name="baseSize">
+       <size>
+        <width>200</width>
+        <height>62</height>
+       </size>
+      </property>
+      <property name="toolTip">
+       <string>Welcome to Rockbox Utility, the installation and housekeeping tool for Rockbox.</string>
+      </property>
+      <property name="accessibleName">
+       <string>Rockbox Logo</string>
+      </property>
+     </widget>
+    </item>
+    <item row="0" column="2">
+     <widget class="QGroupBox" name="groupBoxDevice">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+        <horstretch>0</horstretch>
+        <verstretch>0</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="title">
+       <string>Device</string>
+      </property>
+      <layout class="QGridLayout" name="gridLayout">
+       <item row="0" column="0" rowspan="3">
+        <widget class="QLabel" name="labelPlayerPic">
+         <property name="lineWidth">
+          <number>1</number>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="pixmap">
+          <pixmap>:/icons/rockbox-32.png</pixmap>
+         </property>
+         <property name="scaledContents">
+          <bool>false</bool>
+         </property>
+         <property name="alignment">
+          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+         </property>
+         <property name="margin">
+          <number>3</number>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="1">
+        <widget class="QLabel" name="labelDeviceTitle">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+         <property name="text">
+          <string>Device:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="2">
+        <widget class="QLabel" name="labelDevice">
+         <property name="text">
+          <string>device unknown or invalid</string>
+         </property>
+        </widget>
+       </item>
+       <item row="0" column="3">
+        <spacer name="horizontalSpacer">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item row="0" column="4">
+        <widget class="QPushButton" name="buttonChangeDevice">
+         <property name="text">
+          <string>&amp;Change</string>
+         </property>
+         <property name="icon">
+          <iconset resource="rbutilqt.qrc">
+           <normaloff>:/icons/edit-find.svg</normaloff>:/icons/edit-find.svg</iconset>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="4" rowspan="2">
+        <widget class="QPushButton" name="buttonEject">
+         <property name="text">
+          <string>&amp;Eject</string>
+         </property>
+         <property name="icon">
+          <iconset resource="rbutilqt.qrc">
+           <normaloff>:/icons/media-eject.svg</normaloff>:/icons/media-eject.svg</iconset>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QLabel" name="labelMountpointTitle">
+         <property name="text">
+          <string>Mountpoint:</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="2">
+        <widget class="QLabel" name="labelMountpoint">
+         <property name="text">
+          <string>mountpoint unknown or invalid</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item row="1" column="0" colspan="3">
+     <widget class="QTabWidget" name="tabWidget">
+      <property name="currentIndex">
+       <number>0</number>
+      </property>
+      <widget class="QWidget" name="selective">
+       <attribute name="title">
+        <string>&amp;Installation</string>
+       </attribute>
+       <attribute name="toolTip">
+        <string>Welcome</string>
+       </attribute>
+      </widget>
+      <widget class="QWidget" name="accessibility">
+       <attribute name="title">
+        <string>&amp;Accessibility</string>
+       </attribute>
+       <attribute name="toolTip">
+        <string>Install accessibility add-ons</string>
+       </attribute>
+       <layout class="QGridLayout">
+        <item row="1" column="0">
+         <widget class="QToolButton" name="buttonTalk">
+          <property name="text">
+           <string>Install Talk files</string>
+          </property>
+          <property name="icon">
+           <iconset resource="rbutilqt.qrc">
+            <normaloff>:/icons/audio-volume-high.svg</normaloff>:/icons/audio-volume-high.svg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>56</width>
+            <height>46</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLabel" name="labelTalk">
+          <property name="text">
+           <string>&lt;b&gt;Create Talk Files&lt;/b&gt;&lt;br/&gt;Talkfiles are needed to let Rockbox speak File and Foldernames</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <spacer>
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>51</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item row="2" column="1">
+         <spacer>
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>51</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item row="0" column="0">
+         <widget class="QToolButton" name="buttonCreateVoice">
+          <property name="text">
+           <string>Create Voice files</string>
+          </property>
+          <property name="icon">
+           <iconset resource="rbutilqt.qrc">
+            <normaloff>:/icons/audio-volume-high.svg</normaloff>:/icons/audio-volume-high.svg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>56</width>
+            <height>46</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="labelCreateVoice">
+          <property name="text">
+           <string>&lt;b&gt;Create Voice file&lt;/b&gt;&lt;br/&gt;Voice files are needed to make Rockbox speak the  user interface. Speaking is enabled by default, so
+ if you installed the voice file Rockbox will speak.</string>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="uninstall">
+       <attribute name="title">
+        <string>Backup &amp;&amp; &amp;Uninstallation</string>
+       </attribute>
+       <attribute name="toolTip">
+        <string>Uninstall Rockbox</string>
+       </attribute>
+       <layout class="QGridLayout" name="gridLayout_2">
+        <item row="0" column="0">
+         <widget class="QToolButton" name="buttonRemoveBootloader">
+          <property name="text">
+           <string>Uninstall Bootloader</string>
+          </property>
+          <property name="icon">
+           <iconset resource="rbutilqt.qrc">
+            <normaloff>:/icons/edit-clear.svg</normaloff>:/icons/edit-clear.svg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>56</width>
+            <height>46</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QLabel" name="labelRemoveBootloader">
+          <property name="text">
+           <string>&lt;b&gt;Remove the bootloader&lt;/b&gt;&lt;br/&gt;After removing the bootloader you won't be able to start Rockbox.</string>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QToolButton" name="buttonRemoveRockbox">
+          <property name="text">
+           <string>Uninstall Rockbox</string>
+          </property>
+          <property name="icon">
+           <iconset resource="rbutilqt.qrc">
+            <normaloff>:/icons/edit-clear.svg</normaloff>:/icons/edit-clear.svg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>56</width>
+            <height>46</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLabel" name="labelUninstall">
+          <property name="text">
+           <string>&lt;b&gt;Uninstall Rockbox from your audio player.&lt;/b&gt;&lt;br/&gt;This will leave the bootloader in place (you need to remove it manually).</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QToolButton" name="buttonBackup">
+          <property name="text">
+           <string>Backup</string>
+          </property>
+          <property name="icon">
+           <iconset resource="rbutilqt.qrc">
+            <normaloff>:/icons/package-x-generic.svg</normaloff>:/icons/package-x-generic.svg</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>56</width>
+            <height>46</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QLabel" name="labelBackup">
+          <property name="text">
+           <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Backup current installation.&lt;/span&gt;&lt;/p&gt;&lt;p&gt;Create a backup by archiving the contents of the Rockbox installation folder.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <spacer>
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>40</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </widget>
+      <widget class="QWidget" name="info">
+       <attribute name="title">
+        <string>Inf&amp;o</string>
+       </attribute>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>631</width>
+     <height>30</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menu_File">
+    <property name="title">
+     <string>&amp;File</string>
+    </property>
+    <addaction name="actionInstall_Rockbox_Utility_on_player"/>
+    <addaction name="action_Configure"/>
+    <addaction name="separator"/>
+    <addaction name="actionE_xit"/>
+   </widget>
+   <widget class="QMenu" name="menuAbout">
+    <property name="title">
+     <string>&amp;Help</string>
+    </property>
+    <addaction name="action_About"/>
+    <addaction name="actionAbout_Qt"/>
+    <addaction name="separator"/>
+    <addaction name="actionShow_Changelog"/>
+    <addaction name="action_System_Info"/>
+    <addaction name="action_Trace"/>
+    <addaction name="separator"/>
+    <addaction name="action_Help"/>
+   </widget>
+   <widget class="QMenu" name="menuA_ctions">
+    <property name="title">
+     <string>Action&amp;s</string>
+    </property>
+    <widget class="QMenu" name="menuAccessibility">
+     <property name="title">
+      <string>&amp;Accessibility</string>
+     </property>
+     <addaction name="actionCreate_Voice_File"/>
+     <addaction name="actionCreate_Talk_Files"/>
+    </widget>
+    <widget class="QMenu" name="menuUninstallation">
+     <property name="title">
+      <string>&amp;Uninstallation</string>
+     </property>
+     <addaction name="actionRemove_bootloader"/>
+     <addaction name="actionUninstall_Rockbox"/>
+    </widget>
+    <addaction name="action_Installation"/>
+    <addaction name="menuAccessibility"/>
+    <addaction name="menuUninstallation"/>
+   </widget>
+   <addaction name="menu_File"/>
+   <addaction name="menuA_ctions"/>
+   <addaction name="menuAbout"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="actionEmpty_local_download_cache">
+   <property name="text">
+    <string>Empty local download cache</string>
+   </property>
+  </action>
+  <action name="actionInstall_Rockbox_Utility_on_player">
+   <property name="text">
+    <string>Install Rockbox Utility on player</string>
+   </property>
+  </action>
+  <action name="action_Configure">
+   <property name="text">
+    <string>&amp;Configure</string>
+   </property>
+  </action>
+  <action name="actionE_xit">
+   <property name="text">
+    <string>E&amp;xit</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Q</string>
+   </property>
+  </action>
+  <action name="action_About">
+   <property name="text">
+    <string>&amp;About</string>
+   </property>
+  </action>
+  <action name="actionAbout_Qt">
+   <property name="text">
+    <string>About &amp;Qt</string>
+   </property>
+  </action>
+  <action name="action_Help">
+   <property name="text">
+    <string>&amp;Help</string>
+   </property>
+  </action>
+  <action name="actionInfo">
+   <property name="text">
+    <string>Info</string>
+   </property>
+  </action>
+  <action name="actionComplete_Installation">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/bootloader_btn.png</normaloff>:/icons/bootloader_btn.png</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Complete Installation</string>
+   </property>
+  </action>
+  <action name="actionSmall_Installation">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/rbinstall_btn.png</normaloff>:/icons/rbinstall_btn.png</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Minimal Installation</string>
+   </property>
+  </action>
+  <action name="actionInstall_Bootloader">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/bootloader_btn.png</normaloff>:/icons/bootloader_btn.png</iconset>
+   </property>
+   <property name="text">
+    <string>Install &amp;Bootloader</string>
+   </property>
+  </action>
+  <action name="actionInstall_Rockbox">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/rbinstall_btn.png</normaloff>:/icons/rbinstall_btn.png</iconset>
+   </property>
+   <property name="text">
+    <string>Install &amp;Rockbox</string>
+   </property>
+  </action>
+  <action name="actionFonts_Package">
+   <property name="icon">
+    <iconset>
+     <normaloff>:/icons/font_btn.png</normaloff>:/icons/font_btn.png</iconset>
+   </property>
+   <property name="text">
+    <string>Install &amp;Fonts Package</string>
+   </property>
+  </action>
+  <action name="actionInstall_Themes">
+   <property name="icon">
+    <iconset resource="rbutilqt.qrc">
+     <normaloff>:/icons/preferences-desktop-theme.svg</normaloff>:/icons/preferences-desktop-theme.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Install &amp;Themes</string>
+   </property>
+  </action>
+  <action name="actionInstall_Game_Files">
+   <property name="icon">
+    <iconset resource="rbutilqt.qrc">
+     <normaloff>:/icons/input-gaming.svg</normaloff>:/icons/input-gaming.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Install &amp;Game Files</string>
+   </property>
+  </action>
+  <action name="actionInstall_Voice_File">
+   <property name="icon">
+    <iconset resource="rbutilqt.qrc">
+     <normaloff>:/icons/audio-volume-high.svg</normaloff>:/icons/audio-volume-high.svg</iconset>
+   </property>
+   <property name="text">
+    <string>&amp;Install Voice File</string>
+   </property>
+  </action>
+  <action name="actionCreate_Talk_Files">
+   <property name="icon">
+    <iconset resource="rbutilqt.qrc">
+     <normaloff>:/icons/audio-volume-high.svg</normaloff>:/icons/audio-volume-high.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Create &amp;Talk Files</string>
+   </property>
+  </action>
+  <action name="actionRemove_bootloader">
+   <property name="icon">
+    <iconset resource="rbutilqt.qrc">
+     <normaloff>:/icons/edit-clear.svg</normaloff>:/icons/edit-clear.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Remove &amp;bootloader</string>
+   </property>
+  </action>
+  <action name="actionUninstall_Rockbox">
+   <property name="icon">
+    <iconset resource="rbutilqt.qrc">
+     <normaloff>:/icons/edit-clear.svg</normaloff>:/icons/edit-clear.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Uninstall &amp;Rockbox</string>
+   </property>
+  </action>
+  <action name="actionRead_PDF_manual">
+   <property name="text">
+    <string>Read PDF manual</string>
+   </property>
+  </action>
+  <action name="actionRead_HTML_manual">
+   <property name="text">
+    <string>Read HTML manual</string>
+   </property>
+  </action>
+  <action name="actionDownload_PDF_manual">
+   <property name="text">
+    <string>Download PDF manual</string>
+   </property>
+  </action>
+  <action name="actionDownload_HTML_manual_zip">
+   <property name="text">
+    <string>Download HTML manual (zip)</string>
+   </property>
+  </action>
+  <action name="actionCreate_Voice_File">
+   <property name="icon">
+    <iconset resource="rbutilqt.qrc">
+     <normaloff>:/icons/audio-volume-high.svg</normaloff>:/icons/audio-volume-high.svg</iconset>
+   </property>
+   <property name="text">
+    <string>Create &amp;Voice File</string>
+   </property>
+   <property name="iconText">
+    <string>Create Voice File</string>
+   </property>
+  </action>
+  <action name="action_System_Info">
+   <property name="text">
+    <string>&amp;System Info</string>
+   </property>
+  </action>
+  <action name="action_Trace">
+   <property name="text">
+    <string>System &amp;Trace</string>
+   </property>
+  </action>
+  <action name="action_Installation">
+   <property name="text">
+    <string>&amp;Installation</string>
+   </property>
+  </action>
+  <action name="actionShow_Changelog">
+   <property name="text">
+    <string>Show &amp;Changelog</string>
+   </property>
+  </action>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QSvgWidget</class>
+   <extends>QWidget</extends>
+   <header location="global">QSvgWidget</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
+ <tabstops>
+  <tabstop>tabWidget</tabstop>
+  <tabstop>buttonChangeDevice</tabstop>
+  <tabstop>buttonRemoveBootloader</tabstop>
+  <tabstop>buttonRemoveRockbox</tabstop>
+  <tabstop>buttonCreateVoice</tabstop>
+  <tabstop>buttonTalk</tabstop>
+ </tabstops>
+ <resources>
+  <include location="rbutilqt.qrc"/>
+ </resources>
+ <connections/>
+</ui>

@@ -1,0 +1,131 @@
+\subsection{Oscilloscope}
+\screenshot{plugins/images/ss-oscilloscope}{Oscilloscope}{img:oscilloscope}
+
+This demo shows the shape of the sound samples that make up the music
+being played.
+At faster speed rates, the \dap\ is less responsive
+to user input and music may start to skip.
+
+\subsubsection{Keys}
+
+\begin{btnmap}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{Long \ButtonRec}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonSelect}
+    \opt{GIGABEAT_PAD,GIGABEAT_S_PAD}{\ButtonMenu}
+    \opt{SANSA_E200_PAD,SANSA_FUZE_PAD}{Long \ButtonUp}
+    \opt{IAUDIO_X5_PAD,IRIVER_H10_PAD,MROBE100_PAD}{Long \ButtonPlay}
+    \opt{SAMSUNG_YH92X_PAD}{\ButtonPlay+\ButtonLeft}
+    \opt{SAMSUNG_YH820_PAD}{\ButtonRec+\ButtonLeft}
+    \opt{PBELL_VIBE500_PAD}{Long \ButtonOK}
+    \opt{RG_NANO_PAD}{\ButtonB}
+    \opt{FIIO_M3K_PAD}{Long \ButtonBack}
+    & Toggle waveform / peaks \\
+    \opt{PBELL_VIBE500_PAD}{\ButtonMenu}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IAUDIO_X5_PAD,SANSA_E200_PAD%
+      ,SANSA_FUZE_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,GIGABEAT_PAD,MROBE100_PAD%
+      ,SANSA_FUZEPLUS_PAD}{\ButtonSelect}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{Long \ButtonSelect}
+    \opt{IRIVER_H10_PAD}{\ButtonRew}
+    \opt{GIGABEAT_S_PAD}{\ButtonPrev}
+    \opt{COWON_D2_PAD}{\TouchTopMiddle}
+    \opt{MPIO_HD200_PAD}{\ButtonFunc}
+    \opt{MPIO_HD300_PAD}{\ButtonEnter}
+    \opt{XDUOO_X3_PAD}{\ButtonPlay}
+    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonFF}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonX}
+    \opt{FIIO_M3K_PAD}{\ButtonMenu}
+    & Toggle filled / curve / plot \\
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonMode}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonSelect+\ButtonRight}
+    \opt{IAUDIO_X5_PAD}{\ButtonRec}
+    \opt{IRIVER_H10_PAD}{\ButtonFF}
+    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,GIGABEAT_PAD,MROBE100_PAD}{\ButtonDown}
+    \opt{SANSA_FUZE_PAD}{\ButtonSelect+\ButtonRight}
+    \opt{GIGABEAT_S_PAD}{\ButtonNext}
+    \opt{COWON_D2_PAD}{\TouchBottomMiddle}
+    \opt{PBELL_VIBE500_PAD}{\ButtonCancel}
+    \opt{SANSA_FUZEPLUS_PAD}{\ButtonBack}
+    \opt{MPIO_HD200_PAD,MPIO_HD300_PAD}{\ButtonRec}
+    \opt{SAMSUNG_YH92X_PAD}{\ButtonPlay+\ButtonRight}
+    \opt{SAMSUNG_YH820_PAD}{\ButtonRec+\ButtonRight}
+    \opt{XDUOO_X3_PAD}{\ButtonHome}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonB}
+    \opt{FIIO_M3K_PAD}{\ButtonPlay}
+    & Toggle whether to scroll or not \\
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonRec}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonSelect+\ButtonLeft}
+    \opt{IAUDIO_X5_PAD,SANSA_CLIP_PAD}{Long \ButtonSelect}
+    \opt{IRIVER_H10_PAD}{Long \ButtonRew}
+    \opt{SANSA_E200_PAD,SANSA_C200_PAD,GIGABEAT_PAD,MROBE100_PAD}{\ButtonUp}
+    \opt{SANSA_FUZE_PAD}{\ButtonSelect+\ButtonLeft}
+    \opt{GIGABEAT_S_PAD}{\ButtonMenu}
+    \opt{COWON_D2_PAD}{\TouchBottomLeft}
+    \opt{PBELL_VIBE500_PAD}{\ButtonOK}
+    \opt{MPIO_HD200_PAD}{Long \ButtonFunc}
+    \opt{MPIO_HD300_PAD}{\ButtonMenu}
+    \opt{SANSA_FUZEPLUS_PAD}{\ButtonUp}
+    \opt{SAMSUNG_YH92X_PAD}{\ButtonPlay+\ButtonUp}
+    \opt{SAMSUNG_YH820_PAD}{\ButtonRec+\ButtonUp}
+    \opt{XDUOO_X3_PAD}{Long \ButtonPlay}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonR}
+    \opt{FIIO_M3K_PAD}{\ButtonBack}
+    & Toggle drawing orientation \\
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD,IAUDIO_X5_PAD,IRIVER_H10_PAD%
+        ,GIGABEAT_S_PAD,PBELL_VIBE500_PAD,MPIO_HD200_PAD,MPIO_HD300_PAD%
+        ,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}%
+        {\ButtonPlay}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOn}
+    \opt{SANSA_E200_PAD,SANSA_C200_PAD}{\ButtonRec}
+    \opt{SANSA_FUZE_PAD,SANSA_CLIP_PAD}{\ButtonUp}
+    \opt{GIGABEAT_PAD}{\ButtonA}
+    \opt{MROBE100_PAD}{\ButtonDisplay}
+    \opt{COWON_D2_PAD}{\TouchCenter}
+    \opt{XDUOO_X3_PAD}{\ButtonHome}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonA}
+    \opt{FIIO_M3K_PAD}{\ButtonSelect}
+    & Pause the demo \\
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IAUDIO_X5_PAD,PBELL_VIBE500_PAD%
+        ,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD,RG_NANO_PAD}%
+        {\ButtonUp{} / \ButtonDown}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD,SANSA_E200_PAD,SANSA_FUZE_PAD}{\ButtonScrollFwd{} / \ButtonScrollBack}
+    \opt{IRIVER_H10_PAD,MPIO_HD300_PAD}{\ButtonScrollUp{} / \ButtonScrollDown}
+    \opt{SANSA_C200_PAD,SANSA_CLIP_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD,MROBE100_PAD,MPIO_HD200_PAD%
+        ,SANSA_FUZEPLUS_PAD,XDUOO_X3_PAD}
+        {\ButtonVolUp{} / \ButtonVolDown}
+    \opt{COWON_D2_PAD}{\ButtonPlus{} / \ButtonMinus}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{FIIO_M3K_PAD}{\ButtonVolUp{} / \ButtonVolDown}
+    & Increase / decrease volume\\
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IAUDIO_X5_PAD%
+        ,IPOD_4G_PAD,IPOD_3G_PAD,SANSA_E200_PAD,SANSA_FUZE_PAD,IRIVER_H10_PAD%
+        ,SANSA_C200_PAD,SANSA_CLIP_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD,MROBE100_PAD,PBELL_VIBE500_PAD%
+        ,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD,RG_NANO_PAD}
+        {\ButtonRight{} / \ButtonLeft}
+    \opt{COWON_D2_PAD}{\TouchMidRight\ /\ \TouchMidLeft}
+    \opt{MPIO_HD200_PAD,MPIO_HD300_PAD}{\ButtonFF{} / \ButtonRew}
+    \opt{XDUOO_X3_PAD}{\ButtonPrev{} / \ButtonNext}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{FIIO_M3K_PAD}{\ButtonScrollFwd{} / \ButtonScrollBack}
+    & Increase / decrease speed\\
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOff}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonMenu}
+    \opt{IAUDIO_X5_PAD,IRIVER_H10_PAD,SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD%
+        ,GIGABEAT_PAD,MROBE100_PAD,COWON_D2_PAD,SANSA_FUZEPLUS_PAD,XDUOO_X3_PAD}
+        {\ButtonPower}
+    \opt{SANSA_FUZE_PAD}{Long \ButtonHome}
+    \opt{GIGABEAT_S_PAD}{\ButtonBack}
+    \opt{PBELL_VIBE500_PAD}{\ButtonRec}
+    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRew}
+    \opt{MPIO_HD200_PAD}{\ButtonRec+\ButtonPlay}
+    \opt{MPIO_HD300_PAD}{Long \ButtonMenu}
+       \opt{HAVEREMOTEKEYMAP}{&
+          \opt{IRIVER_RC_H100_PAD}{\ButtonRCStop}
+        }
+    \opt{RG_NANO_PAD}{\ButtonStart}
+    \opt{FIIO_M3K_PAD}{\ButtonPower}
+    & Exit demo \\
+\end{btnmap}

@@ -1,0 +1,315 @@
+/***************************************************************************
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
+ *
+ * Copyright (C) 2002 Björn Stenberg
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+ * KIND, either express or implied.
+ *
+ ****************************************************************************/
+
+#include <stdio.h>
+#include <stdbool.h>
+#include "action.h"
+#include "font.h"
+#ifdef HAVE_REMOTE_LCD
+#include "lcd-remote.h"
+#endif
+#include "lang.h"
+#include "usb.h"
+#if defined(HAVE_USBSTACK)
+#include "usb_core.h"
+#ifdef USB_ENABLE_HID
+#include "usb_keymaps.h"
+#endif
+#endif
+#include "settings.h"
+#include "led.h"
+#include "appevents.h"
+#include "usb_screen.h"
+#include "skin_engine/skin_engine.h"
+#include "playlist.h"
+#include "misc.h"
+#include "icons.h"
+
+#include "bitmaps/usblogo.h"
+
+#ifdef HAVE_REMOTE_LCD
+#include "bitmaps/remote_usblogo.h"
+#endif
+
+#if (CONFIG_STORAGE & STORAGE_MMC)
+#include "ata_mmc.h"
+#endif
+
+struct usb_screen_vps_t
+{
+    struct viewport parent;
+    struct viewport logo;
+#ifndef USB_ENABLE_HID
+};
+#else
+    struct viewport title;
+};
+
+int usb_keypad_mode;
+static void draw_usb_keypad_mode(struct viewport *title)
+{
+    struct screen *screen = &screens[SCREEN_MAIN];
+    struct viewport *last_vp = screen->set_viewport(title);
+    screen->clear_viewport();
+    title->flags |= VP_FLAG_ALIGN_CENTER;
+    if (title->width > 1)
+        screen->puts_scroll(0, 0, str(keypad_mode_name_get(usb_keypad_mode)));
+    screen->set_viewport(last_vp);
+}
+#endif /* USB_ENABLE_HID */
+
+static void handle_usb_events(struct viewport *title)
+{
+#if (CONFIG_STORAGE & STORAGE_MMC) && !defined(SIMULATOR)
+    int next_update = 0;
+#endif /* STORAGE_MMC */
+    int button;
+
+    /* Don't return until we get SYS_USB_DISCONNECTED */
+    while(1)
+    {
+#ifndef USB_ENABLE_HID
+        (void)title;
+#else
+        if (global_settings.usb_hid)
+        {
+            button = get_hid_usb_action();
+            if (button == ACTION_USB_HID_MODE_SWITCH_NEXT ||
+                button == ACTION_USB_HID_MODE_SWITCH_PREV)
+                draw_usb_keypad_mode(title);
+        }
+        else
+#endif
+        {
+            /* hid emits the event in get_action */
+            send_event(GUI_EVENT_ACTIONUPDATE, NULL);
+            button = button_get_w_tmo(HZ/2);
+        }
+        if (button == SYS_USB_DISCONNECTED)
+            return;
+        if (button == SYS_CHARGER_DISCONNECTED)
+            reset_runtime();
+
+/* USB-MMC bridge can report activity */
+#if (CONFIG_STORAGE & STORAGE_MMC) && !defined(SIMULATOR)
+        if(TIME_AFTER(current_tick,next_update))
+        {
+            if(usb_inserted()) {
+                led(mmc_usb_active(HZ));
+            }
+            next_update=current_tick+HZ/2;
+        }
+#endif /* STORAGE_MMC */
+    }
+}
+
+static void usb_screen_fix_viewports(struct screen *screen,
+        struct usb_screen_vps_t *usb_screen_vps)
+{
+    int logo_width, logo_height;
+    struct viewport *parent = &usb_screen_vps->parent;
+    struct viewport *logo = &usb_screen_vps->logo;
+
+#ifdef HAVE_REMOTE_LCD
+    if (screen->screen_type == SCREEN_REMOTE)
+    {
+        logo_width = BMPWIDTH_remote_usblogo;
+        logo_height = BMPHEIGHT_remote_usblogo;
+    }
+    else
+#endif
+    {
+        logo_width = BMPWIDTH_usblogo;
+        logo_height = BMPHEIGHT_usblogo;
+    }
+
+    viewportmanager_theme_enable(screen->screen_type, true, parent);
+
+    if (logo_width  > parent->width)
+        logo_width  = parent->width;
+    if (logo_height > parent->height)
+        logo_height = parent->height;
+
+    *logo = *parent;
+    logo->x = parent->x + parent->width - logo_width;
+#ifdef HAVE_LCD_SPLIT
+    switch (statusbar_position(screen))
+    {
+         /* start beyond split */
+         case STATUSBAR_OFF:
+             logo->y = parent->y + LCD_SPLIT_POS;
+             break;
+         case STATUSBAR_TOP:
+             logo->y = parent->y + LCD_SPLIT_POS - STATUSBAR_HEIGHT;
+             break;
+         /* start at the top for maximum space */
+         default:
+             logo->y = parent->y;
+             break;
+    }
+#else
+    logo->y = parent->y + (parent->height - logo_height) / 2;
+#endif
+    logo->width = logo_width;
+    logo->height = logo_height;
+
+#ifdef USB_ENABLE_HID
+    if (global_settings.usb_hid)
+    {
+        struct viewport *title = &usb_screen_vps->title;
+        int char_height = font_get(parent->font)->height;
+        *title = *parent;
+        title->y = logo->y + logo->height + char_height;
+        title->height = char_height;
+        /* try to fit logo and title to parent */
+        if (parent->y + parent->height < title->y + title->height)
+        {
+            logo->y = parent->y;
+            title->y = parent->y + logo->height;
+        }
+
+        int i =0, langid = LANG_USB_KEYPAD_MODE;
+        while (langid >= 0) /* ensure the USB mode strings get cached */
+        {
+            font_getstringsize(str(langid), NULL, NULL, title->font);
+            langid = keypad_mode_name_get(i++);
+        }
+    }
+#endif
+}
+
+static void usb_screens_draw(struct usb_screen_vps_t *usb_screen_vps_ar)
+{
+    struct viewport *last_vp;
+    static const struct bitmap* logos[NB_SCREENS] = {
+        &bm_usblogo,
+#ifdef HAVE_REMOTE_LCD
+        &bm_remote_usblogo,
+#endif
+    };
+    FOR_NB_SCREENS(i)
+    {
+        struct screen *screen = &screens[i];
+        struct usb_screen_vps_t *usb_screen_vps = &usb_screen_vps_ar[i];
+        struct viewport *parent = &usb_screen_vps->parent;
+        struct viewport *logo = &usb_screen_vps->logo;
+
+        last_vp = screen->set_viewport(parent);
+        screen->clear_viewport();
+        screen->backlight_on();
+        screen->set_viewport(logo);
+        screen->bmp(logos[i], 0, 0);
+        screen->set_viewport(last_vp);
+    }
+#ifdef USB_ENABLE_HID
+    if (global_settings.usb_hid)
+        draw_usb_keypad_mode(&usb_screen_vps_ar[SCREEN_MAIN].title);
+#endif
+}
+
+void gui_usb_screen_run(bool early_usb, intptr_t seqnum)
+{
+#ifdef SIMULATOR /* the sim allows toggling USB fast enough to overflow viewportmanagers stack */
+    static bool in_usb_screen = false;
+    if (in_usb_screen)
+        return;
+    in_usb_screen = true;
+#endif
+
+    struct usb_screen_vps_t usb_screen_vps_ar[NB_SCREENS];
+    struct viewport *title = NULL;
+#if defined HAVE_TOUCHSCREEN
+    enum touchscreen_mode old_mode = touchscreen_get_mode();
+
+    /* TODO: Paint buttons on screens OR switch to point mode and use
+     * touchscreen as a touchpad to move the host's mouse cursor */
+    touchscreen_set_mode(TOUCHSCREEN_BUTTON);
+#endif
+
+    push_current_activity(ACTIVITY_USBSCREEN);
+
+#ifdef USB_ENABLE_HID
+    usb_keypad_mode = global_settings.usb_keypad_mode;
+    title = &usb_screen_vps_ar[SCREEN_MAIN].title;
+#else
+    title = NULL;
+#endif
+
+    FOR_NB_SCREENS(i)
+    {
+        struct screen *screen = &screens[i];
+        /* we might be coming from anywhere, and the originating screen
+         * can't be practically expected to cleanup the UI because
+         * we're invoked via default_event_handler(), therefore we make a
+         * generic cleanup here */
+        screen->set_viewport(NULL);
+        screen->scroll_stop();
+        usb_screen_fix_viewports(screen, &usb_screen_vps_ar[i]);
+    }
+
+#if 0 /* handled in usb_screen_fix_viewports() */
+    /* update the UI before disabling fonts, this maximizes the propability
+     * that font cache lookups succeed during USB */
+    send_event(GUI_EVENT_ACTIONUPDATE, NULL);
+#endif
+
+    if(!early_usb)
+    {
+        /* The font system leaves the .fnt fd's open, so we need for force close them all */
+        font_disable_all();
+    }
+    usb_acknowledge(SYS_USB_CONNECTED_ACK, seqnum);
+    usb_screens_draw(usb_screen_vps_ar);
+    handle_usb_events(title);
+
+#if defined(USB_ENABLE_HID)
+    if (global_settings.usb_hid)
+        screens[SCREEN_MAIN].scroll_stop_viewport(title);
+    if (global_settings.usb_keypad_mode != usb_keypad_mode)
+    {
+        global_settings.usb_keypad_mode = usb_keypad_mode;
+        settings_save();
+    }
+#endif
+
+#ifdef HAVE_TOUCHSCREEN
+    touchscreen_set_mode(old_mode);
+#endif
+
+    if(!early_usb)
+    {
+        font_enable_all();
+        /* Not pretty, reload all settings so fonts are loaded again correctly */
+        settings_apply(true);
+        /* Reload playlist */
+        playlist_resume();
+    }
+
+    FOR_NB_SCREENS(i)
+    {
+        screens[i].backlight_on();
+        viewportmanager_theme_undo(i, false);
+    }
+
+    pop_current_activity();
+#ifdef SIMULATOR
+    in_usb_screen = false;
+#endif
+}

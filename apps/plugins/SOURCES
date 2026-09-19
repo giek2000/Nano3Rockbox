@@ -1,0 +1,242 @@
+/* plugins common to all models */
+#if !defined(SIMULATOR) && (CONFIG_BATTERY_MEASURE != 0)
+battery_bench.c
+#endif
+#ifdef HAVE_TAGCACHE
+db_folder_select.c
+tagcache/tagcache.c
+#endif
+chessclock.c
+countdown_timer.c
+credits.c
+cube.c
+cue_playlist.c
+dart_scorer.c
+dict.c
+file_picker.c
+jackpot.c
+keybox.c
+keyremap.c
+lastfm_scrobbler.c
+lastfm_scrobbler_viewer.c
+logo.c
+lrcplayer.c
+mosaique.c
+main_menu_config.c
+playing_time.c
+properties.c
+random_folder_advance_config.c
+rb_info.c
+rockblox.c
+search.c
+settings_dumper.c
+snow.c
+sort.c
+stats.c
+view_text.c
+#ifdef HAVE_TOUCHSCREEN
+stopwatch.lua
+#else
+stopwatch.c
+#endif
+theme_remove.c
+vbrfix.c
+md5sum.c
+dice.c
+disktidy.c
+flipit.c
+shopper.c
+resistor.c
+otp.c
+windows_lnk.c
+
+#ifdef USB_ENABLE_HID
+remote_control.c
+#endif
+
+#ifdef HAVE_BACKLIGHT
+lamp.c
+#endif /* HAVE_BACKLIGHT */
+
+#if defined(HAVE_RECORDING) && (defined(HAVE_LINE_IN) || defined(HAVE_MIC_IN))
+pitch_detector.c
+#endif
+
+#ifdef HAVE_PITCHCONTROL
+pitch_screen.c
+#endif
+
+mp3_encoder.c
+wav2wv.c
+
+#if CONFIG_RTC
+alarmclock.c
+#endif /* CONFIG_RTC */
+
+/* Platform-specific */
+#if defined(IRIVER_H100_SERIES) || defined(IRIVER_H300_SERIES)
+iriverify.c
+#endif
+
+#if (CONFIG_PLATFORM & PLATFORM_NATIVE) /* Requires real hardware */
+#if defined(IRIVER_H100_SERIES) || defined(IRIVER_H300_SERIES)
+iriver_flash.c
+#endif
+
+#if defined(IPOD_NANO2G)
+crypt_firmware.c
+#endif
+#endif
+
+/* Overlays loaders */
+
+#if defined(HAVE_LCD_COLOR) && (LCD_STRIDEFORMAT == HORIZONTAL_STRIDE) && !defined(RG_NANO) /* Build issues */
+#if (PLUGIN_BUFFER_SIZE > 0x14000) && (CONFIG_PLATFORM & (PLATFORM_NATIVE |PLATFORM_HOSTED)) && (defined(CPU_ARM) || defined(CPU_MIPS))
+duke3d.c
+quake.c
+wolf3d.c
+#endif
+#endif
+
+#if PLUGIN_BUFFER_SIZE <= 0x20000
+
+#if CONFIG_KEYPAD != SANSA_M200_PAD \
+    && CONFIG_KEYPAD != HM60X_PAD
+/* not enough buttons for rockboy */
+rockboy.c
+#endif
+
+zxbox.c
+chessbox.c
+goban.c
+pictureflow.c
+
+#endif /* PLUGIN_BUFFER_SIZE <= 0x20000 */
+
+metronome.c
+
+2048.c
+
+/* Lua needs at least 160 KB to work in */
+#if PLUGIN_BUFFER_SIZE >= 0x80000
+boomshine.lua
+picross.lua
+#ifdef HAVE_LCD_COLOR
+pixel-painter.lua
+#endif /* HAVE_LCD_COLOR */
+#endif /* PLUGIN_BUFFER_SIZE >= 0x80000 */
+
+#if PLUGIN_BUFFER_SIZE > 0x10000 /* Doesn't fit on most 2Mb targets */
+amaze.c
+#endif
+
+rockblox1d.c
+brickmania.c
+calendar.c
+maze.c
+mazezam.c
+text_editor.c
+wavview.c
+robotfindskitten.c
+xobox.c
+spacerocks.c
+
+blackjack.c
+bounce.c
+bubbles.c
+calculator.c
+chip8.c
+chopper.c
+demystify.c
+jewels.c
+minesweeper.c
+open_plugins.c
+oscilloscope.c
+pegbox.c
+periodic_table.c
+pong.c
+sliding_puzzle.c
+snake.c
+snake2.c
+solitaire.c
+sokoban.c
+star.c
+starfield.c
+vu_meter.c
+wormlet.c
+
+#ifdef HAVE_HOTKEY
+announce_status.c
+#endif
+
+/* can't build in the sim for some reason */
+#if defined(HAVE_MULTIBOOT) && !defined(SIMULATOR)
+multiboot_select.c
+#endif
+
+
+/* Plugins needing the grayscale lib on low-depth LCDs */
+fire.c
+plasma.c
+
+#ifdef HAVE_LCD_COLOR
+clix.c
+codebuster.c
+#endif
+
+#if (LCD_WIDTH > 112) && (LCD_HEIGHT > 64)
+fireworks.c
+#endif
+
+#if LCD_DEPTH == 16
+/* FIXME: make it work with 24bit (needs lot of memory) */
+rockpaint.c
+#endif
+
+rocklife.c
+
+#if LCD_DEPTH > 1                  /* non-mono bitmap targets */
+
+matrix.c
+speedread.c
+
+#if (LCD_WIDTH > 138)
+invadrox.c
+superdom.c
+#endif
+
+#endif /* LCD_DEPTH > 1 */
+
+
+
+#ifdef HAVE_TEST_PLUGINS /* enable in advanced build options */
+#ifdef HAVE_ADJUSTABLE_CPU_FREQ
+test_boost.c
+#endif
+test_codec.c
+#ifdef HAVE_JPEG
+test_core_jpeg.c
+#endif
+test_disk.c
+test_fps.c
+test_gfx.c
+test_kbd.c
+#if LCD_DEPTH < 4 && !defined(SIMULATOR)
+test_scanrate.c
+#endif
+#ifndef HAVE_LCD_COLOR
+test_grey.c
+test_greylib_bitmap_scale.c
+#endif
+test_mem.c
+test_mem_jpeg.c
+#ifdef HAVE_LCD_COLOR
+test_resize.c
+#endif
+test_sampr.c
+#ifdef HAVE_TOUCHSCREEN
+test_touchscreen.c
+#endif
+test_usb.c
+test_viewports.c
+#endif /* HAVE_TEST_PLUGINS */

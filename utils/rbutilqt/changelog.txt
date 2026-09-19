@@ -1,0 +1,59 @@
+# Rockbox Utility changelog.
+# This file is parsed by Rockbox Utility. Format:
+# - Lines starting with # are comments and ignored.
+# - A version starts with the string "Version" followed by the number.
+# - After the version individual entries follow. Those start with a *.
+# - After the entries an empty line has to follow.
+# - After that the next version can start.
+
+Version 1.4
+* Rework player detection functionality to provide better results.
+* Limit mountpoints ("Select your device in the filesystem") in configuration dialog to usable ones.
+* Change encoder volume configuration to allow more sensible values.
+* Save proxy password differently in configuration file (better solution for FS#12166).
+* Add support for building Rockbox Utility with Qt5.
+* Add support for extracting Original Firmware files compressed with CAB (G#418).
+* Add support for Creative Zen X-Fi3 (G#419).
+* Add Changelog window.
+* Rework System Trace functionality.
+* Add support for Iriver H300 v1.31K firmware.
+* Add support for Sandisk Sansa Clip Zip v01.01.21 firmware.
+* Fix manual link for Archos Recorder V2.
+
+Version 1.4.1
+* Fix crash on detecting player in MTP mode (FS#12989).
+* Extend hint when uninstallation requires reinstalling the Original Firmware.
+* Improve update check information dialog.
+* Correct USB IDs for Sandisk Sansa c200v2.
+* Add support for iPod Classic 6G bootloader.
+
+Version 1.5.0
+* Add support for xDuoo X3, X3ii, X20.
+* Add support for AGPTek Rocker.
+* Add support for AIGO Eros Q and various clones (AIGO Eros K, AGPTek H3, HIFI Walker H2, Surfans F20)
+* Add support for showing "retired" target status.
+* Update Iriver H100 / H300 series bootloader.
+* Rename Game Files installation to Plugin Data; now installs files for further games (Duke3D, Wolfenstein3D, etc.) as well as other plugins (MIDI patchset)
+* Support installing daily builds.
+* Move Manual / prerendered voice file installation to main dialog.
+* Support installing voice files in other languages than english (available languages depends on build).
+* Improved HiDPI support.
+* Drop support for Qt4, now requires Qt5.
+* Update various external libraries.
+* Server Downloads changed to https.
+
+Version 1.5.1
+* Fix bootloader installation for Ipods.
+* Fix bootloader installation for Sandisk players.
+* Improve responsiveness on install / uninstall.
+* Enable Themes installation if themes are selected.
+
+Version 1.5.2
+* Add support for Native Port to AIGO Eros Q and various clones
+* Mark hosted port to AIGO Eros Q and various clones "disabled" (can be reenabled by checking the "show disabled targets" checkbox)
+* Talk clip generation now respects 'talkclips.ignore' files
+* Generate additional talk clips for language name and 'invalid voice file'
+* When installing development builds, fall back to daily artefacts for non-firmware files
+* Where possible, extract voice corrections file from the actual device
+* Port TTS preview to QT6
+* Drop support for Qt5, now requires Qt6.

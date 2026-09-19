@@ -1,0 +1,305 @@
+\chapter{Plugins}\label{ref:plugins}
+\opt{mpiohd200}{%
+\fixme{The manual for MPIO HD200 is incomplete. Keymap definitions for plugins are missing.}\\
+
+}
+Plugins are programs that Rockbox can load and run. Only one plugin can
+be loaded at a time. Plugins have exclusive control over the user interface.
+This means you cannot switch back and forth between a plugin and Rockbox. When
+a plugin is loaded, you need to exit it to return to the Rockbox interface.
+Most plugins will not interfere with music playback but some of them will stop
+playback while running. Plugins have the file extension \fname{.rock}. Most of
+them can be started from \setting{Browse Plugins} in the \setting{Main Menu}.\\
+
+Viewer plugins get started automatically by opening an associated file (i.e.
+text files%
+, chip8 games), or from the \setting{Open with} option on the \setting{Context Menu}.
+
+\section{Games}
+  See also the Chip{}-8 emulator in \reference{ref:Chip8emulator},
+  Frotz in \reference{ref:Frotz},
+  \opt{iriverh100,iaudiom5,lcd_color}
+  {Rockboy in \reference{ref:Rockboy}}
+  and ZXBox in \reference{ref:ZXBox}.
+
+\input{plugins/2048.tex}
+
+\nopt{lowmem}{\input{plugins/amaze.tex}}
+
+\input{plugins/blackjack.tex}
+
+\opt{large_plugin_buffer}{\input{plugins/boomshine.tex}}
+
+\input{plugins/brickmania.tex}
+
+\input{plugins/bubbles.tex}
+
+\input{plugins/chessbox.tex}
+
+\input{plugins/chopper.tex}
+
+\opt{lcd_color}{\input{plugins/clix.tex}}
+
+\opt{lcd_color}{\input{plugins/codebuster.tex}}
+
+\input{plugins/dice.tex}
+
+\nopt{xduoox3}{\nopt{lowmem}{\input{plugins/doom.tex}}}
+
+\opt{lcd_color}{\nopt{lowmem,iaudiox5,iriverh300,rgnano}{\input{plugins/duke3d.tex}}}
+
+\input{plugins/flipit.tex}
+
+\input{plugins/goban.tex}
+
+\opt{lcd_non-mono}{\nopt{iriverh10_5gb,ipodmini1g,c200,c200v2,mpiohd200,clipzip,samsungyh820}{
+  \input{plugins/invadrox.tex}}}
+
+\input{plugins/jackpot.tex}
+
+\input{plugins/jewels.tex}
+
+\input{plugins/maze.tex}
+
+\input{plugins/mazezam.tex}
+
+\input{plugins/minesweeper.tex}
+
+\opt{iriverh100,iaudiom5,lcd_color}{\nopt{c200,c200v2}{\input{plugins/pacbox.tex}}}
+
+\input{plugins/pegbox.tex}
+
+\opt{lcd_color}{\opt{large_plugin_buffer}{\input{plugins/pixelpainter.tex}}}
+
+\input{plugins/pong.tex}
+
+\opt{lcd_color}{\nopt{lowmem,iaudiox5,iriverh300,rgnano}{\input{plugins/quake.tex}}}
+
+\input{plugins/reversi.tex}
+
+\input{plugins/robotfindskitten.tex}
+
+\input{plugins/rockblox.tex}
+
+\input{plugins/rockblox1d.tex}
+
+\opt{lcd_color}{\input{plugins/sgt-puzzles.tex}}
+
+\input{plugins/sliding.tex}
+
+\input{plugins/snake.tex}
+
+\input{plugins/snake2.tex}
+
+\input{plugins/sokoban.tex}
+
+\input{plugins/solitaire.tex}
+
+\input{plugins/spacerocks.tex}
+
+\input{plugins/star.tex}
+
+\input{plugins/sudoku.tex}
+
+\opt{lcd_non-mono}{\nopt{iriverh10_5gb,ipodmini1g,c200,c200v2,mpiohd200,clipzip,samsungyh820}{
+  \input{plugins/superdom.tex}}}
+
+\opt{lcd_color}{\nopt{lowmem,iaudiox5,iriverh300,rgnano}{\input{plugins/wolf3d.tex}}}
+
+\input{plugins/wormlet.tex}
+
+\input{plugins/xobox.tex}
+
+\opt{lcd_non-mono}{\input{plugins/xrick.tex}}
+
+\opt{lcd_color}{\input{plugins/xworld.tex}}
+
+
+
+
+\section{Demos}
+
+\input{plugins/announce_status.tex}
+
+\input{plugins/bounce.tex}
+
+\input{plugins/credits.tex}
+
+\input{plugins/cube.tex}
+
+\input{plugins/demystify.tex}
+
+\input{plugins/fft.tex}
+
+\input{plugins/fire.tex}
+
+\input{plugins/fractals.tex}
+
+\input{plugins/logo.tex}
+
+\nopt{xduoox3,clip,clipplus}{\input{plugins/matrix.tex}}
+
+\input{plugins/mosaic.tex}
+
+\input{plugins/oscilloscope.tex}
+
+\opt{tagcache}{\input{plugins/pictureflow.tex}}
+
+\input{plugins/plasma.tex}
+
+\input{plugins/rocklife.tex}
+
+\input{plugins/snow.tex}
+
+\input{plugins/starfield.tex}
+
+\input{plugins/vumeter.tex}
+
+\section{\label{ref:Viewersplugins}Viewers}
+
+Viewers are plugins which are associated with specific file extensions.
+They cannot be run directly but are started by ``playing'' the associated file.
+Viewers are stored in the \fname{/.rockbox/rocks/viewers/} directory.
+\par
+\note{
+Some viewer plugins can only be used by selecting the \setting{Open With...}
+option from the \setting{Context Menu} (see \reference{ref:Contextmenu}).}
+\begin{table}
+  \begin{rbtabular}{.92\textwidth}{Xlc}%
+      {\textbf{Viewer Plugin}& \textbf{Associated filetype(s)} & \textbf{Context Menu only}}%
+      {}{}
+    Shortcuts             & \fname{.link}                    &   \\
+    MS Windows shortcuts  & \fname{.lnk}                     &   \\
+    Chip-8 Emulator       & \fname{.ch8}                     &   \\
+    Frotz                 & \fname{.z1} to \fname{.z8}       &   \\
+    Image Viewer          & \fname{.bmp, .jpg, .jpeg, .png\opt{lcd_color}{, .ppm}}  &   \\
+    Lua scripting language& \fname{.lua}                     &   \\
+    \nopt{lowmem}{
+        Midiplay          & \fname{.mid, .midi}              &   \\
+        Mikmod            & \fname{.669, .amf, .asy, .dsm,}  &   \\
+                          & \fname{.far, .gdm, imf, .it,}    &  \\
+                          & \fname{.m15, .med, .mod, .okt,}   &  \\
+                          & \fname{.s3m, .stm, .stx, .ult,}  &  \\
+                          & \fname{.uni, .umx, .xm}         &   \\
+        MPEG Player       & \fname{.mpg, .mpeg, .mpv, .m2v}  &   \\
+    }
+    \opt{HAVE_HW_H264}{
+        H.264 Player      & \fname{.mp4, .m4v, .mov}          &   \\
+    }
+        MP3 Encoder       & \fname{.wav}                     & x \\
+        Rockboy       & \fname{.gb, .gbc}                &   \\
+    Search                & \fname{.m3u, .m3u8}              & x \\
+    Shopping list         & \fname{.shopper}                 &   \\
+    Sort                  & \fname{.*}                       & x \\
+    Text Viewer           & \fname{.txt,.nfo, .md,.*}        &   \\
+    VBRfix                & \fname{.mp3}                     & x \\
+    ZXBox                 & \fname{.tap, .tax, .sna, .z80}   &   \\
+  \end{rbtabular}
+\end{table}
+
+\input{plugins/shortcuts.tex}
+
+\input{plugins/winshortcuts.tex}
+
+\input{plugins/chip8emulator.tex}
+
+\input{plugins/frotz.tex}
+
+\input{plugins/imageviewer.tex}
+
+\opt{large_plugin_buffer}{\input{plugins/lua.tex}}
+
+\nopt{lowmem}{\input{plugins/midiplay.tex}}
+\nopt{lowmem}{\input{plugins/mikmod.tex}}
+
+\nopt{lowmem}{\input{plugins/mpegplayer.tex}}
+
+\opt{HAVE_HW_H264}{\input{plugins/h264_player.tex}}
+
+\input{plugins/mp3_encoder.tex}
+
+\opt{iriverh300,iriverh100,SANSA_FUZE_PAD,SANSA_E200_PAD,IPOD_4G_PAD,IPOD_3G_PAD%
+    ,IPOD_1G2G_PAD,SAMSUNG_YPR0_PAD}{
+  \input{plugins/pdbox.tex}}
+
+\nopt{%
+  ipod1g2g,ipod3g,ipod4g,ipodmini% horizontal pixelformat not implemented
+  ,iaudiom3,mpiohd200, % vertical interleaved pixelformat not implemented
+  ,mrobe100% lcd size/depth not implemented
+  }{
+  \input{plugins/rockboy.tex}}
+
+\input{plugins/search.tex}
+
+\input{plugins/shopper.tex}
+
+\input{plugins/sort.tex}
+
+\opt{lcd_non-mono}{\input{plugins/speedread.tex}}
+
+\input{plugins/text_viewer.tex}
+
+\input{plugins/theme_remove.tex}
+
+\input{plugins/vbrfix.tex}
+
+\input{plugins/zxbox.tex}
+
+
+\section{Applications}
+
+\opt{rtc}{\input{plugins/alarmclock.tex}}
+
+\input{plugins/batterybenchmark.tex}
+
+\input{plugins/calculator.tex}
+
+\opt{rtc}{\input{plugins/calendar.tex}}
+
+\input{plugins/chess_clock.tex}
+
+\opt{rtc}{\input{plugins/clock.tex}}
+
+\input{plugins/dart_scorer.tex}
+
+\input{plugins/dict.tex}
+
+\input{plugins/disktidy.tex}
+
+\input{plugins/keybox.tex}
+
+\opt{HAVE_BACKLIGHT}{\input{plugins/lamp.tex}}
+
+\input{plugins/lastfm_scrobbler.tex}
+
+\input{plugins/lrcplayer.tex}
+
+\input{plugins/main_menu_config.tex}
+
+\opt{multi_boot}{\input{plugins/multiboot_select.tex}}
+
+\input{plugins/md5sum.tex}
+
+\input{plugins/metronome.tex}
+
+\input{plugins/open_plugins.tex}
+
+\input{plugins/otp.tex}
+
+\input{plugins/periodic_table.tex}
+
+\opt{recording_mic}{\input{plugins/pitch_detector.tex}}
+
+\input{plugins/random_folder_advance_config.tex}
+
+\input{plugins/resistor.tex}
+
+\opt{lcd_color}{\input{plugins/rockpaint.tex}}
+
+\input{plugins/stats.tex}
+
+\input{plugins/stopwatch.tex}
+
+\input{plugins/text_editor.tex}
+
+\input{plugins/countdown_timer.tex}

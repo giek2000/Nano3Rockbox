@@ -1,0 +1,33 @@
+\subsection{Lamp}
+Lamp is a simple plugin to use your player as a lamp (flashlight, torch).
+You get an empty screen with maximum brightness.
+\begin{btnmap}
+  \opt{lcd_color}{
+    \PluginLeft{} / \PluginRight
+        &
+    \opt{HAVEREMOTEKEYMAP}{
+        & }
+    Toggle between colours
+        \\
+  }
+  \opt{backlight_brightness}{
+    \nopt{scrollwheel}{\PluginUp{} / \PluginDown}
+    \opt{scrollwheel}{\PluginScrollFwd{} / \PluginScrollBack}
+        &
+    \opt{HAVEREMOTEKEYMAP}{
+        & }
+    Change the brightness
+        \\
+  }
+  \opt{HAVE_BUTTON_LIGHTS}{
+    \PluginSelect{}
+        &
+    \opt{HAVEREMOTEKEYMAP}{
+        & }
+    Toggle the button light
+        \\
+  }
+    \nopt{IPOD_4G_PAD,IPOD_3G_PAD}{\PluginCancel{} or \PluginExit}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonMenu}
+    & Exit to menu\\
+\end{btnmap}

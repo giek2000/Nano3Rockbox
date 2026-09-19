@@ -1,0 +1,62 @@
+export PS1='\u@\h \w$ '
+export PS2='> '
+export PS3='? '
+export PS4='[$LINENO]+'
+
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin
+export LD_LIBRARY_PATH=/mnt/media1/Lib:/mnt/media1/Lib/ExtraLib:/usr/lib
+export FSL_OMX_COMPONENT_REGISTRY="/Sysdata/OpenMaxIL/ComponentRegistry.txt"
+export FSL_OMX_MAX_INDEX_SIZE=1048576
+export MALLOC_CHECK_=0
+
+ulimit -s unlimited
+hwclock -s
+
+alias ls='ls --color=auto'
+alias ll='ls -l --color=auto'
+
+# Start with safe mode
+SCRIPT="/etc/safemode/smode"
+if [ -f $SCRIPT ]
+then
+    /bin/sh $SCRIPT
+    # it returns 1 if usb was connected
+    if [ "$?" = "1" ]
+    then
+        sync
+        sleep 1
+        reboot
+    fi
+fi
+
+# Ironically, r1's ROM contains a lot of r0's executables, including the main one.
+# So we need to check against r1 before!
+if [ -e "/usr/local/bin/r1" ]
+then
+    MAINFILE="/usr/local/bin/r1"
+else
+    MAINFILE="/usr/local/bin/r0"
+fi
+
+# Parameters for the application
+MAINFILE_ARGV="Application AppMain"
+
+# source the rockbox loader script
+SOURCE="/mnt/media0/.rockbox/rockbox.sh"
+[ -f $SOURCE ] && . $SOURCE
+
+# source user script if available
+SOURCE="/mnt/media0/rc.user"
+[ -f $SOURCE ] && . $SOURCE
+
+# finally call the entry point
+# $MAINFILE_REDIRECT can be specified to do e.g. > /dev/null
+if [ -e $MAINFILE ]
+then
+    chmod 777 $MAINFILE
+    sh -c "$MAINFILE $MAINFILE_ARGV $MAINFILE_REDIRECT"
+    rm -f /mnt/media1/r0_media0
+    sync
+#	sleep 5
+    reboot
+fi

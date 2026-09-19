@@ -1,0 +1,38 @@
+\subsection{Bounce}
+\screenshot{plugins/images/ss-bounce}{Bounce}{img:bounce}
+This demo is of the word ``Rockbox'' bouncing across the screen.
+\opt{rtc}{There is also an analogue clock in the background.}
+In \setting{Scroll mode} the bouncing text is replaced by a different one
+scrolling from right to left.
+
+\begin{btnmap}
+    \nopt{IPOD_4G_PAD,IPOD_3G_PAD}{\PluginUp{} / \PluginDown}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\PluginLeft{} / \PluginRight}
+        \opt{HAVEREMOTEKEYMAP}{& }
+    & Moves to next/previous option\\
+    \nopt{scrollwheel} {
+       \PluginRight{} / \PluginLeft
+    }
+    \opt{scrollwheel} {
+       \PluginScrollFwd{} / \PluginScrollBack
+    }
+       \opt{HAVEREMOTEKEYMAP}{& }
+    & Increases/decreases option value\\
+    \PluginSelect
+       \opt{HAVEREMOTEKEYMAP}{& }
+    & Toggles Scroll mode\\
+    \nopt{IPOD_4G_PAD,IPOD_3G_PAD}{\PluginCancel{} or \PluginExit}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\PluginUp}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    & Exits bounce demo\\
+\end{btnmap}
+
+Available options are:
+
+\begin{description}
+\item[Xdist/Ydist.] The distance to X axis and Y axis
+respectively
+\item[Xadd/Yadd.]How fast the code moves on the sine curve on
+each axis
+\item[Xsane/Ysane.] Changes the appearance of the bouncing.
+\end{description}

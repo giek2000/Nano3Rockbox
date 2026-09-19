@@ -1,0 +1,24 @@
+\subsection{Starfield}
+\screenshot{plugins/images/ss-starfield}{Starfield}{img:starfield}
+Starfield simulation (like the classic screensaver).
+Speed reacts to playing audio, or can be manually adjusted.
+
+\begin{btnmap}
+    \PluginRight{} / \PluginLeft
+  \opt{HAVEREMOTEKEYMAP}{& }
+    & Increase / decrease number of stars\\
+    
+  \nopt{IPOD_4G_PAD,IPOD_3G_PAD}{\PluginUp{} / \PluginDown}
+  \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonScrollFwd{} / \ButtonScrollBack}
+  \opt{HAVEREMOTEKEYMAP}{& }
+    & Increase / decrease speed\\
+    \opt{lcd_color}{%
+         \PluginSelect%
+       \opt{HAVEREMOTEKEYMAP}{& }
+        & Change colours\\%
+    }%
+  \nopt{IPOD_4G_PAD,IPOD_3G_PAD}{\PluginCancel{} or \PluginExit}
+  \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonMenu}
+  \opt{HAVEREMOTEKEYMAP}{& }
+    & Quit\\
+\end{btnmap}

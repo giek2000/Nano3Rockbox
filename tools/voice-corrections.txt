@@ -1,0 +1,144 @@
+              __________               __   ___.
+    Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+    Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+    Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+    Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+                      \/            \/     \/    \/            \/
+
+  Voice string corrections for TTS engines.
+
+  The list items are separated by the separator that is defined by the first
+  character on the line. If the first character is a whitespace the line will
+  get treated as comment.  The format is as follows:
+
+     /language/engine/vendor/string/replacement/flags
+
+   '/' is the separator, and all strings (other than flags) are Perl regexes.
+
+  Empty lines and lines starting with a whitespace are ignored, for all
+  others the first character will become the separator.
+
+  Flags may be left blank, but 'g' (ie "global") and "i" (case-insensitive)
+  are typically used.
+
+  Note that the contents of this file are applied IN ORDER, so you must place
+  more generic rules at the end.  For example, the Russian-specific
+  correction for 'USB' conflicts with the generic correction.
+
+  ** English
+
+/english/(sapi|festival)/.*/plugin(s?)/plug-in$1/ig
+/english/festival/.*/\ba\b/ay/ig
+/english/festival/.*//$/./
+/english/.*/.*/ no\./number /ig
+
+  ** German (deutsch)
+
+/deutsch/.*/.*/alkaline/alkalein/ig
+/deutsch/.*/.*/byte(s?)/beit$1/ig
+/deutsch/.*/.*/clip(s?)/klipp$1/ig
+/deutsch/.*/.*/\bcover/kawwer/ig
+/deutsch/.*/.*/cuesheet/kjuschiet/ig
+/deutsch/.*/.*/dither/didder/ig
+/deutsch/.*/.*/equalizer/iquileiser/ig
+/deutsch/.*/.*/\bflash\b/fläsh/ig
+/deutsch/.*/.*/\bfirmware(s?)\b/firmwer$1/ig
+/deutsch/.*/.*/\bI D 3 tag\b/I D 3 täg/ig
+/deutsch/.*/.*/\bloudness\b/laudness/ig
+/deutsch/.*/.*/\bunicode\b/unikod/ig
+/deutsch/sapi/AT&T Labs/alphabet/alfabet/ig;
+/deutsch/sapi/AT&T Labs/ampere/amper/ig;
+/deutsch/sapi/AT&T Labs/\bdezibel\b/de-zibell/ig;
+/deutsch/sapi/AT&T Labs/diddering/didde-ring/ig;
+/deutsch/sapi/AT&T Labs/energie\b/ener-gie/ig;
+/deutsch/sapi/AT&T Labs/\Blauf\b/-lauf/ig;
+/deutsch/sapi/AT&T Labs/\bnumerisch\b/numehrisch/ig;
+
+  ** Italian (italiano)
+
+     for all italian engines (e.g. for english words)
+
+/italiano/.*/.*/Replaygain/Ripleyghein/ig
+/italiano/.*/.*/Crossfade/Crossfeid/ig
+/italiano/.*/.*/beep/Bip/ig
+/italiano/.*/.*/cuesheet/chiushit/ig
+/italiano/.*/.*/fade/feid/ig
+/italiano/.*/.*/Crossfeed/crossfid/ig
+/italiano/.*/.*/Cache/chash/ig
+/italiano/.*/.*/\bfirmware(s?)\b/firmuer$1/ig
+/italiano/.*/.*/\bFile(s?)\b/fail$1/ig
+/italiano/.*/.*/\bloudness\b/laudness/ig
+/italiano/.*/.*/\bunicode\b/unikod/ig
+/italiano/.*/.*/Playlist/pleylist/ig
+/italiano/.*/.*/WavPack/wave pak/ig
+/italiano/.*/.*/BITRATE/bit reit/ig
+/italiano/.*/.*/Codepage/cod page/ig
+/italiano/.*/.*/PCM Wave/pcm Ue'iv/ig
+/italiano/sapi/Loquendo/Inizializza/inizializa/ig
+/italiano/sapi/ScanSoft, Inc/V/v/ig
+/italiano/sapi/ScanSoft, Inc/X/x/ig
+/italiano/sapi/ScanSoft, Inc/stop/stohp/ig
+
+  ** Japanese
+
+/japanese/sapi/L&H/・//ig
+/japanese/sapi/L&H/ /・/ig
+/japanese/sapi/L&H/早送り/ハヤオクリ/ig
+/japanese/sapi/L&H/巻き戻し/巻きも度し/ig
+/japanese/sapi/L&H/大文字/王文字/ig
+/japanese/sapi/L&H/背景色/背景蜀/ig
+/japanese/sapi/L&H/文字色/文字蜀/ig
+/japanese/sapi/L&H/簡体字/カンタイ字/ig
+/japanese/sapi/L&H/USB/ユーヱスビー/ig
+/japanese/sapi/L&H/一杯/いっぱい/ig
+/japanese/sapi/L&H/無い場合レジューム/無い場合、レジューム/ig
+/japanese/sapi/L&H/プレイリスト管理ファイルの更新エラー/プレイリスト管理ファイルの・更新エラー/ig
+/japanese/sapi/Voiceware/が から です/が、殻です/ig
+/japanese/sapi/Voiceware/小文字/こもじ/ig
+/japanese/sapi/Voiceware/巻き戻し$/巻き戻し(っ)/ig
+/japanese/sapi/Voiceware/背景色/ハイケイショク/ig
+/japanese/sapi/Voiceware/文字色/文字ショク/ig
+/japanese/sapi/Voiceware/簡体字/カンタイ字/ig
+/japanese/sapi/Voiceware/繁体字/ハンタイ字/ig
+/japanese/sapi/Voiceware/^強$/きょう/ig
+/japanese/sapi/Voiceware/一杯/いっぱい/ig
+/japanese/sapi/Voiceware/無い場合レジューム/無い場合、れじゅうむ/ig
+/japanese/sapi/Create System Development Co, Ltd./一杯/いっぱい/ig
+
+  ** Russian
+
+/russian/.*/.*/USB/Ю Эс Би/g
+/russian/.*/.*/VBR/Ви Би Ар/g
+/russian/.*/.*/ПДУ/П Д У/g
+/russian/.*/.*/ЖКД/Ж Ка Д/g
+
+  ** Swedish (svenska)
+
+     for all swedish engines (e.g. for english words)
+
+/svenska/.*/.*/kilobyte/kilobajt/ig
+/svenska/.*/.*/megabyte/megabajt/ig
+/svenska/.*/.*/gigabyte/gigabajt/ig
+/svenska/.*/.*/\bloudness\b/laudness/ig
+/svenska/espeak/.*/ampere/ampär/ig
+/svenska/espeak/.*/bokmärken/bok-märken/ig
+/svenska/espeak/.*/generella/schenerella/ig
+/svenska/espeak/.*/dithering/diddering/ig
+/svenska/espeak/.*/\bunicode\b/jynikod/ig
+/svenska/espeak/.*/uttoning/utoning/ig
+/svenska/espeak/.*/procent/pro-cent/ig
+/svenska/espeak/.*/spellistor/spelistor/ig
+/svenska/espeak/.*/cuesheet/qjyschiit/ig
+
+  ** General for all engines and languages
+
+/.*/.*/.*/USB/U S B/g
+/.*/.*/.*/LCD/L C D/g
+/.*/.*/.*/VBR/V B R/g
+/.*/.*/.*/FPS/F P S/g
+/.*/.*/.*/RWPS/R W P S/g
+/.*/.*/.*/WPS/W P S/g
+/.*/.*/.*/ID3/I D 3/g
+/.*/.*/.*/DAC/D A C/g
+/.*/.*/.*/ADC/A D C/g
+/.*/.*/.*/last\.fm/Last F M/ig

@@ -1,0 +1,109 @@
+\section{\label{ref:FMradio}FM Radio}
+\opt{sansa}{
+  \note{Not all Sansas have a radio receiver. Generally all American models do,
+  but European models might not. Rockbox will display the radio menu only if it
+  can find a radio receiver in your Sansa.}
+}
+
+\screenshot{main_menu/images/ss-fm-radio-screen}{The FM radio screen}{}
+  This menu option switches to the radio screen.
+  The FM radio has the ability to remember station frequency settings
+  (presets). Since stations and their frequencies vary depending on location,
+  it is possible to load these settings from a file. Such files should have
+  the filename extension \fname{.fmr} and reside in the directory
+  \fname{/.rockbox/fmpresets} (note that this directory does not exist after
+  the initial Rockbox installation; you should create it manually). To load
+  the settings, i.e. a set of FM stations, from a preset file, just ``play''
+  it from the file browser. Rockbox will ``remember'' and use it in
+  \setting{PRESET} mode until another file has been selected. Some preset
+  files are available here: \wikilink{FmPresets}.
+
+  \opt{recording}{
+     It is also possible to record the FM radio while listening.
+     To start recording, enter the FM radio settings menu with
+     \ActionFMMenu{} and then select \setting{Recording}.
+     At this point, you will be switched to the \setting{Recording Screen}.
+     Further information on \setting{Recording} can be found in
+     \reference{ref:Recording}.
+  }
+
+      \begin{btnmap}
+          \ActionFMPrev, \ActionFMNext
+          \opt{HAVEREMOTEKEYMAP}{& \ActionRCFMPrev, \ActionRCFMNext}
+          & Change frequency in \setting{SCAN} mode or jump to next/previous
+          station in \setting{PRESET} mode.\\
+          %
+          Long \ActionFMPrev, Long \ActionFMNext
+          \opt{HAVEREMOTEKEYMAP}{& Long \ActionRCFMPrev, Long \ActionRCFMNext}
+          & Seek to next station in \setting{SCAN} mode.\\
+          %
+          \opt{SANSA_FUZEPLUS_PAD}{
+              \ActionFMPrevPreset, \ActionFMNextPreset
+              & Jump to next/previous preset station.\\
+          }
+          %
+          \ActionFMSettingsInc, \ActionFMSettingsDec
+          \opt{HAVEREMOTEKEYMAP}{
+              &
+              \opt{IRIVER_RC_H100_PAD}{\ActionRCFMVolUp, \ActionRCFMVolDown}%
+              \nopt{IRIVER_RC_H100_PAD}{\ActionRCFMSettingsInc, \ActionRCFMSettingsDec}%
+          }
+          & Change volume.\\
+
+          %
+          \ActionFMExit
+          \opt{HAVEREMOTEKEYMAP}{& \ActionRCFMExit}
+          & Leave the radio screen with the radio playing.\\
+          %
+          \ActionFMStop
+          \opt{HAVEREMOTEKEYMAP}{& \ActionRCFMStop}
+          & Stop the radio and return to \setting{Main Menu}.\\%
+          %
+            \ActionFMPlay
+              \opt{HAVEREMOTEKEYMAP}{& \ActionRCFMPlay}
+              & Mute radio playback.\\%
+            %
+            \ActionFMMode
+            \opt{HAVEREMOTEKEYMAP}{& \ActionRCFMMode}
+            & Switch between \setting{SCAN} and \setting{PRESET} mode.\\
+            %
+            \ActionFMPreset
+            \opt{HAVEREMOTEKEYMAP}{& \ActionRCFMPreset}
+            & Open a list of radio presets. You can view all the presets that
+              you have, and switch to the station.\\
+          %
+          %
+          \ActionFMMenu
+          \opt{HAVEREMOTEKEYMAP}{& \ActionRCFMMenu}
+          & Display the FM radio settings menu.\\
+          %
+          % software hold targets
+          \nopt{hold_button}{%
+            \opt{SANSA_CLIP_PAD}{\ButtonHome+\ButtonSelect}
+            \opt{SANSA_FUZEPLUS_PAD}{\ButtonPower}
+            & Key lock (software hold switch) on/off.\\
+          }%
+       \end{btnmap}
+
+  \begin{description}
+
+  \item[Saving a preset:]
+    Up to 64 of your favourite stations can be saved as presets.
+      \ActionFMMenu{} to go to the menu, then select \setting{Add preset}.%
+    Enter the name (maximum number of characters is 32).
+    Press \ActionKbdDone{} to save.
+
+  \item[Selecting a preset:]
+        \ActionFMPreset{} to go to the presets list.
+        Use \ActionFMSettingsInc{} and \ActionFMSettingsDec{}
+        to move the cursor and then press \ActionStdOk{}
+        to select. Use \ActionStdCancel{} to leave the preset list without selecting
+        anything.
+
+  \item[Removing a preset:]
+        \ActionFMPreset{} to go to the presets list.
+        Use \ActionFMSettingsInc{} and \ActionFMSettingsDec{}
+        to move the cursor and then press \ActionStdContext{}
+        on the preset that you wish to remove, then select \setting{Remove Preset}.
+  \end{description}
+  \note{The radio will turn off when starting playback of an audio file.}

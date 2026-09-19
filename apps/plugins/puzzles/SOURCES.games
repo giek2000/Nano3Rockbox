@@ -1,0 +1,55 @@
+src/blackbox.c
+src/bridges.c
+src/cube.c
+src/dominosa.c
+src/fifteen.c
+src/filling.c
+src/flip.c
+src/flood.c
+src/galaxies.c
+src/guess.c
+src/inertia.c
+src/keen.c
+src/lightup.c
+#if PLUGIN_BUFFER_SIZE > 0x14000
+src/loopy.c
+#endif
+src/magnets.c
+src/map.c
+src/mines.c
+src/mosaic.c
+src/net.c
+src/netslide.c
+src/palisade.c
+src/pattern.c
+#if PLUGIN_BUFFER_SIZE > 0x14000
+src/pearl.c
+#endif
+src/pegs.c
+src/range.c
+src/rect.c
+src/samegame.c
+src/signpost.c
+src/singles.c
+src/sixteen.c
+src/slant.c
+#if PLUGIN_BUFFER_SIZE > 0x14000
+src/solo.c
+#endif
+src/tents.c
+src/towers.c
+src/tracks.c
+src/twiddle.c
+src/undead.c
+src/unequal.c
+src/unruly.c
+src/untangle.c
+#ifndef WIN32
+src/unfinished/group.c
+#endif
+#ifndef WIN32
+src/unfinished/slide.c
+#endif
+#ifndef WIN32
+src/unfinished/sokoban.c
+#endif

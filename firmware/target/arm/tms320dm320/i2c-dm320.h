@@ -1,0 +1,38 @@
+/***************************************************************************
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
+ *
+ * Copyright (C) 2008 by Maurus Cuelenaere
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+ * KIND, either express or implied.
+ *
+ ****************************************************************************/
+
+#ifndef I2C_DM320_H
+#define I2C_DM320_H
+
+#include "system.h"
+
+void i2c_init(void) INIT_ATTR;
+int i2c_write(unsigned short address, const unsigned char *data, int count);
+int i2c_read(unsigned short address, unsigned char* buf, int count);
+
+#ifdef HAVE_SOFTWARE_I2C
+int i2c_read_bytes(unsigned short address, unsigned short reg,
+                   unsigned char* buf, int count);
+int i2c_write_read_bytes(unsigned short address,
+                         const unsigned char* buf_write, int count_write,
+                         unsigned char* buf_read, int count_read);
+#endif
+
+#endif

@@ -1,0 +1,95 @@
+\subsection{Minesweeper}
+\screenshot{plugins/images/ss-minesweeper}{Minesweeper plugin}{img:minesweeper}
+The classic game of minesweeper.
+The aim of the game is to uncover all of the squares on the board.  If a
+mine is uncovered then the game is over. If a mine is not uncovered,
+then the number of mines adjacent to the current square is revealed. 
+The aim is to use the information you are given to work out where the
+mines are and avoid them.  When the player is certain that they know
+the location of a mine, it can be tagged to avoid accidentally
+``stepping'' on it.
+
+\begin{btnmap}
+  \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonMenu{} / \ButtonPlay{} / \ButtonLeft{} / \ButtonRight}
+  \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IAUDIO_X5_PAD%
+      ,SANSA_E200_PAD,SANSA_FUZE_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD%
+      ,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD%
+      ,RG_NANO_PAD}
+      {\ButtonUp{} / \ButtonDown{} / \ButtonLeft{} / \ButtonRight}
+  \opt{IRIVER_H10_PAD}
+      {\ButtonScrollUp{} / \ButtonScrollDown{} / \ButtonLeft{} / \ButtonRight}
+  \opt{COWON_D2_PAD}
+      {\TouchTopMiddle{} / \TouchBottomMiddle{} / \TouchMidLeft{} / \TouchMidRight}
+  \opt{MPIO_HD300_PAD}{\ButtonScrollUp / \ButtonScrollDown / \ButtonRew / \ButtonFF}
+  \opt{XDUOO_X3_PAD}{\ButtonPrev / \ButtonNext / \ButtonHome / \ButtonOption}
+       \opt{HAVEREMOTEKEYMAP}{& }
+  & Move the cursor across the minefield \\
+  %
+  \opt{IPOD_4G_PAD,IPOD_3G_PAD,SANSA_E200_PAD,SANSA_FUZEPLUS_PAD}{
+     \opt{IPOD_4G_PAD,IPOD_3G_PAD,SANSA_E200_PAD}{\ButtonScrollFwd{} / \ButtonScrollBack}
+     \opt{SANSA_FUZEPLUS_PAD}{\ButtonBottomLeft / \ButtonBottomRight}
+       \opt{HAVEREMOTEKEYMAP}{& }
+  & Scroll through the entire minefield \\}%
+  %
+  \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOn{} / \ButtonRec}
+  \opt{IPOD_4G_PAD,IPOD_3G_PAD,SANSA_FUZEPLUS_PAD}{\ButtonSelect}
+  \opt{IAUDIO_X5_PAD,IRIVER_H10_PAD,GIGABEAT_S_PAD,PBELL_VIBE500_PAD,SAMSUNG_YH92X_PAD%
+      ,SAMSUNG_YH820_PAD,XDUOO_X3_PAD}{\ButtonPlay}
+  \opt{SANSA_E200_PAD}{\ButtonRec}
+  \opt{SANSA_FUZE_PAD}{\ButtonScrollFwd}
+  \opt{SANSA_C200_PAD,SANSA_CLIP_PAD}{\ButtonSelect{} / \ButtonVolDown}
+  \opt{GIGABEAT_PAD}{\ButtonA}
+  \opt{MROBE100_PAD}{\ButtonDisplay}
+  \opt{COWON_D2_PAD}{\TouchCenter}
+  \opt{MPIO_HD300_PAD}{\ButtonEnter}
+       \opt{HAVEREMOTEKEYMAP}{& }
+  \opt{RG_NANO_PAD}{\ButtonX}
+  & Toggle flag on / off \\
+  %
+  \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IAUDIO_X5_PAD,SANSA_E200_PAD%
+      ,SANSA_FUZE_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD,MROBE100_PAD}{\ButtonSelect}
+  \opt{IPOD_4G_PAD,IPOD_3G_PAD}{Long \ButtonSelect}
+  \opt{IRIVER_H10_PAD}{\ButtonRew}
+  \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonFF}
+  \opt{SANSA_C200_PAD,SANSA_CLIP_PAD}{Long \ButtonSelect{} / \ButtonVolUp}
+  \opt{COWON_D2_PAD}{\TouchBottomLeft}
+  \opt{PBELL_VIBE500_PAD}{\ButtonOK}
+  \opt{MPIO_HD300_PAD,SANSA_FUZEPLUS_PAD}{\ButtonPlay}
+  \opt{XDUOO_X3_PAD}{Long \ButtonPlay}
+       \opt{HAVEREMOTEKEYMAP}{& }
+  \opt{RG_NANO_PAD}{\ButtonA}
+  & Reveal the contents of the current square \\
+  %
+  \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonMode}
+  \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonSelect+\ButtonPlay}
+  \opt{IAUDIO_X5_PAD,SAMSUNG_YH820_PAD}{\ButtonRec}
+  \opt{SANSA_C200_PAD,SANSA_CLIP_PAD}{\ButtonSelect+\ButtonUp}
+  \opt{SANSA_E200_PAD}{Long \ButtonRec}
+  \opt{SANSA_FUZE_PAD}{\ButtonScrollBack}
+  \opt{IRIVER_H10_PAD}{\ButtonRew+\ButtonPlay}
+  \opt{SANSA_FUZEPLUS_PAD}{\ButtonBack}
+  \opt{GIGABEAT_PAD,GIGABEAT_S_PAD,MROBE100_PAD,PBELL_VIBE500_PAD}{\ButtonMenu}
+  \opt{COWON_D2_PAD}{\TouchBottomRight}
+  \opt{MPIO_HD300_PAD}{\ButtonMenu}
+  \opt{SAMSUNG_YH92X_PAD}{Long \ButtonPlay}
+  \opt{XDUOO_X3_PAD}{\ButtonOption + \ButtonPlay}
+       \opt{HAVEREMOTEKEYMAP}{& }
+  \opt{RG_NANO_PAD}{\ButtonY}
+  & Display the current game status \\
+  %
+  \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOff}
+  \opt{IAUDIO_X5_PAD,IRIVER_H10_PAD,SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,GIGABEAT_PAD%
+      ,MROBE100_PAD,COWON_D2_PAD,SANSA_FUZEPLUS_PAD}{\ButtonPower}
+  \opt{SANSA_FUZE_PAD}{Long \ButtonHome}
+  \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonSelect+\ButtonMenu}
+  \opt{GIGABEAT_S_PAD}{\ButtonBack}
+  \opt{PBELL_VIBE500_PAD}{\ButtonRec}
+  \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{Long \ButtonRew}
+  \opt{MPIO_HD300_PAD}{Long \ButtonMenu}
+  \opt{XDUOO_X3_PAD}{\ButtonPower}
+       \opt{HAVEREMOTEKEYMAP}{& 
+          \opt{IRIVER_RC_H100_PAD}{\ButtonRCStop}
+        }
+  \opt{RG_NANO_PAD}{\ButtonStart}
+  & Exit the game \\
+\end{btnmap}

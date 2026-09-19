@@ -1,0 +1,79 @@
+\subsection{Pong}
+\screenshot{plugins/images/ss-pong}{Pong}{img:pong}
+Pong is a simple one or two player ``tennis game''. Whenever a player misses the ball the other scores. 
+
+The game starts in demo mode, with the CPU controlling both sides.
+
+As soon as a button to control one of the paddles is pressed, control of that paddle passes to the player,
+so for a single player game, just press the appropriate buttons to control the side you want to play. For
+a two player game, both players should just press the appropriate buttons for their side.
+
+\begin{btnmap}
+    \opt{SANSA_E200_PAD,SANSA_FUZE_PAD,SANSA_FUZE_PAD}{\ButtonLeft}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IAUDIO_X5_PAD,GIGABEAT_PAD%
+      ,GIGABEAT_S_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD,RG_NANO_PAD}{\ButtonUp}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD,PBELL_VIBE500_PAD}{\ButtonMenu}
+    \opt{IRIVER_H10_PAD}{\ButtonScrollUp}
+    \opt{SANSA_C200_PAD,SANSA_CLIP_PAD}{\ButtonVolUp}
+    \opt{MROBE100_PAD}{\ButtonMenu}
+    \opt{COWON_D2_PAD}{\TouchTopLeft}
+    \opt{MPIO_HD300_PAD}{\ButtonRew}
+    \opt{SANSA_FUZEPLUS_PAD}{\ButtonBack}
+    \opt{XDUOO_X3_PAD}{\ButtonPrev}
+      \opt{HAVEREMOTEKEYMAP}{& }
+    & Left player up\\
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonLeft}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IAUDIO_X5_PAD,SANSA_E200_PAD%
+      ,SANSA_FUZE_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD,SAMSUNG_YH92X_PAD%
+      ,SAMSUNG_YH820_PAD,RG_NANO_PAD}{\ButtonDown}
+    \opt{IRIVER_H10_PAD}{\ButtonScrollDown}
+    \opt{SANSA_C200_PAD,SANSA_CLIP_PAD}{\ButtonVolDown}
+    \opt{MROBE100_PAD,PBELL_VIBE500_PAD}{\ButtonLeft}
+    \opt{SANSA_FUZEPLUS_PAD}{\ButtonBottomLeft}
+    \opt{COWON_D2_PAD}{\TouchBottomLeft}
+    \opt{MPIO_HD300_PAD}{\ButtonRec}
+    \opt{XDUOO_X3_PAD}{\ButtonOption}
+      \opt{HAVEREMOTEKEYMAP}{& }
+    & Left player down\\
+    \opt{SANSA_E200_PAD,SANSA_FUZE_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD}{\ButtonUp}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOn}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonRight}
+    \opt{IAUDIO_X5_PAD,SAMSUNG_YH820_PAD}{\ButtonRec}
+    \opt{IRIVER_H10_PAD}{\ButtonRew}
+    \opt{GIGABEAT_PAD,GIGABEAT_S_PAD}{\ButtonVolUp}
+    \opt{MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD}{\ButtonPlay}
+    \opt{COWON_D2_PAD}{\TouchTopRight}
+    \opt{MPIO_HD300_PAD,SAMSUNG_YH92X_PAD}{\ButtonFF}
+    \opt{XDUOO_X3_PAD}{\ButtonHome}
+      \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonX}
+    & Right player up\\
+    \opt{SANSA_E200_PAD,SANSA_FUZE_PAD}{\ButtonRight}
+    \opt{SANSA_C200_PAD,SANSA_CLIP_PAD}{\ButtonDown}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonMode}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD,IAUDIO_X5_PAD}{\ButtonPlay}
+    \opt{IRIVER_H10_PAD,SAMSUNG_YH820_PAD}{\ButtonFF}
+    \opt{GIGABEAT_PAD,GIGABEAT_S_PAD}{\ButtonVolDown}
+    \opt{MROBE100_PAD,PBELL_VIBE500_PAD}{\ButtonRight}
+    \opt{COWON_D2_PAD}{\TouchBottomRight}
+    \opt{MPIO_HD300_PAD}{\ButtonPlay}
+    \opt{SANSA_FUZEPLUS_PAD}{\ButtonBottomRight}
+    \opt{SAMSUNG_YH92X_PAD}{\ButtonRew}
+    \opt{XDUOO_X3_PAD}{\ButtonNext}
+      \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonY}
+    & Right player down\\
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOff}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonSelect}
+    \opt{IAUDIO_X5_PAD,IRIVER_H10_PAD,SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD%
+      ,GIGABEAT_PAD,MROBE100_PAD,COWON_D2_PAD,SANSA_FUZEPLUS_PAD,XDUOO_X3_PAD}{\ButtonPower}
+    \opt{SANSA_FUZE_PAD}{\ButtonHome}
+    \opt{GIGABEAT_S_PAD}{\ButtonBack}
+    \opt{PBELL_VIBE500_PAD}{\ButtonRec}
+    \opt{SAMSUNG_YH92X_PAD}{Long \ButtonPlay}
+    \opt{SAMSUNG_YH820_PAD}{\ButtonRew}
+    \opt{MPIO_HD300_PAD}{Long \ButtonMenu}
+      \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonStart}
+    & Quit\\
+\end{btnmap}

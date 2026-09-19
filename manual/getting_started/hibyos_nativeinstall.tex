@@ -1,0 +1,96 @@
+In order to install Rockbox onto the \dap{}, we need to first install the bootloader
+onto the device's internal memory. The bootloader is the only modification to the device
+we will make - Rockbox itself will exist only on the SD card.
+
+Once the bootloader is installed onto the device, it is exceedingly rare to need to change it.
+Updating Rockbox is as simple as overwriting it on the SD card and rebooting the device.
+
+We will install the bootloader with the original firmware's recovery
+mode. Please follow the instructions detailed below.
+% mode. The process is summed up by the following:
+
+% \begin{enumerate}
+%   \item Determine what hardware version your player is and download
+%     the correct bootloader update file
+%   \item Place the bootloader \fname{update.upt} file on the SD card
+%   \item In the original firmware, run the Firmware Update: \\
+%     \fname{System Settings --> Firmware Update}
+% \end{enumerate}
+
+% \textbf{These steps, in detail, are:}
+
+\begin{enumerate}
+\item \textbf{Determine hardware version}
+
+Determine what hardware version your player is. Go to \fname{System Settings --> About The Player --> Version} and reference
+the list below. hw1, hw1.5, and hw2 players all use the same update
+file (with one exception), while hw3 players and hw4 players each use a different one.
+
+\note{Important: If your player's version is not contained in this list,
+for example if the firmware version is newer than what is listed here,
+we cannot be sure that the hardware is the same. The best thing to do is
+contact the manufacturer and ask them two things: (1) for an update file
+of your version, and (2) if a player with the most recent version listed
+here can be upgraded to the firmware version on your player. If they say
+yes, we can be more certain that the hardware has not changed. These lists
+may not be the most up to date, please see the wiki page at
+\url{https://www.rockbox.org/wiki/AIGOErosQK} for the most up-to-date list.}
+
+\begin{description}
+\item[hw1/hw1.5/hw2 players]
+\hfill{}
+  \begin{itemize}
+    \item Aigo Eros Q V1.8 - V2.0
+    \item Hifiwalker H2 V1.1 - V1.6
+    \item Surfans F20 V2.2 - V2.7
+  \end{itemize}
+  These players use \fname{erosqnative-hw1hw2-erosq.upt} as the update file.
+  The lone exception is the Hifiwalker H2 V1.3, which uses the update file \\
+  \fname{erosqnative-hw1hw2-eros\_h2.upt}.
+\item[hw3 players]
+\hfill{}
+  \begin{itemize}
+    \item Aigo Eros Q V2.1
+    \item Hifiwalker H2 V1.7 - V1.8
+    \item Surfans F20 V3.0 - V3.3
+  \end{itemize}
+  These players use \fname{erosqnative-hw3-erosq.upt} as the update file.
+\item[hw4 players]
+\hfill{}
+  \begin{itemize}
+    \item Aigo Eros Q V2.2
+    \item Hifiwalker H2 V1.9 - V2.3
+    \item Surfans F20 V3.4
+  \end{itemize}
+  These players use \fname{erosqnative-hw4-erosq\_2024.upt} as the update file.
+\end{description}
+
+Download the \fname{.upt} file for these players from \download{bootloader/aigo/native/}.
+
+% \subsubsection{Format the SD card with the stock firmware}\label{ref:format_sd_card}
+% This is a convenient time to format the SD card. We need to ensure the SD card is formatted
+% as FAT - most cards come from the factory with exFAT on them. The stock firmware can be used to do this.
+% Back up any file you do not want to lose and go to \fname{System Settings --> Reset --> Format TF Card}
+% in the stock firmware. Once done, you can put your files back on the SD card.
+
+% \note{Remember, this must also be done if you acquire a new SD card in the future!}
+
+\item \textbf{Place update file on SD card}
+
+Place the appropriate bootloader file on the root of the SD card and name it
+\emph{exactly} \fname{update.upt}.
+
+Don't forget to safely eject/unmount your player.
+
+\item \textbf{Run Firmware Update}
+
+In the original firmware, run the firmware updater by going to
+\fname{System Settings --> Firmware Update}. The player will reboot into the updater and self-install
+the bootloader.
+
+If you have not installed the Rockbox build onto the SD card yet, it will reboot and fail
+to find Rockbox. We simply then need to install Rockbox onto the SD card. Please continue to
+section \ref{sec:installing_firmware}, \textit{Installing the Firmware}.
+
+Once the bootloader is installed onto the device, \fname{update.upt} can be deleted from the SD card if you wish.
+\end{enumerate}

@@ -1,0 +1,28 @@
+#if !defined(HAVE_TOUCHSCREEN) || defined(DX50) || defined(DX90) || defined(HIBY_R3PROII) || defined(HIBY_R1) || defined(HIDIZS_AP80MAX)
+/* This is for devices having a keypad, running RockBox as an application */
+#include "SUBDIRS"
+
+#else
+/* For all targets with a bitmap display and a touchscreen
+ * In fact, most of the plugins aren't supposed to be used on a touch(mouse) device
+ */
+lua
+lua_scripts
+
+#if PLUGIN_BUFFER_SIZE > 0x20000
+fft
+#endif
+
+reversi
+
+#ifdef HAVE_TAGCACHE
+pictureflow
+tagcache
+#endif
+
+/* For all the swcodec targets */
+#if MEMORYSIZE > 2 /* we need a lot of RAM for instruments */
+mikmod
+#endif
+
+#endif /* HAVE_TOUCHSCREEN */

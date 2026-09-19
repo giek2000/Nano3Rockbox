@@ -1,0 +1,11 @@
+[Desktop Entry]
+GenericName=Rockbox Theme Editor
+Hidden=false
+Name=Rockbox Theme Editor
+Type=Application
+Terminal=false
+StartupNotify=true
+Icon=rbthemeeditor
+Exec=RockboxThemeEditor
+Categories=Utility;
+

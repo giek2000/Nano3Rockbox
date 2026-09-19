@@ -1,0 +1,93 @@
+#ifdef SIMULATOR
+buttonmaps.c
+#if CONFIG_KEYPAD == GIGABEAT_PAD
+gigabeat.c
+#elif CONFIG_KEYPAD == GIGABEAT_S_PAD
+gigabeat-s.c
+#elif CONFIG_KEYPAD == IAUDIO_X5M5_PAD
+iaudio-x5_m5.c
+#elif CONFIG_KEYPAD == IAUDIO_M3_PAD
+iaudio-m3.c
+#elif (CONFIG_KEYPAD == IPOD_1G2G_PAD) || (CONFIG_KEYPAD == IPOD_3G_PAD) \
+   || (CONFIG_KEYPAD == IPOD_4G_PAD)
+ipod.c
+#elif CONFIG_KEYPAD == IRIVER_H10_PAD
+iriver-h10.c
+#elif (CONFIG_KEYPAD == IRIVER_H100_PAD) || (CONFIG_KEYPAD == IRIVER_H300_PAD)
+iriver-h100_h300.c
+#elif CONFIG_KEYPAD == SANSA_C200_PAD
+sansa-c200.c
+#elif CONFIG_KEYPAD == SANSA_CLIP_PAD
+sansa-clip.c
+#elif CONFIG_KEYPAD == SANSA_E200_PAD
+sansa-e200.c
+#elif CONFIG_KEYPAD == SANSA_FUZE_PAD
+sansa-fuze.c
+#elif CONFIG_KEYPAD == SANSA_M200_PAD
+sansa-m200.c
+#elif CONFIG_KEYPAD == MROBE500_PAD
+mrobe500.c
+#elif CONFIG_KEYPAD == MROBE100_PAD
+mrobe100.c
+#elif CONFIG_KEYPAD == COWON_D2_PAD
+cowon-d2.c
+#elif CONFIG_KEYPAD == PHILIPS_SA9200_PAD
+gogear-sa9200.c
+#elif CONFIG_KEYPAD == PHILIPS_HDD1630_PAD
+gogear-hdd1630.c
+#elif CONFIG_KEYPAD == PHILIPS_HDD6330_PAD
+gogear-hdd6330.c
+#elif CONFIG_KEYPAD == ONDAVX747_PAD
+onda-vx747.c
+#elif CONFIG_KEYPAD == ONDAVX777_PAD
+onda-vx777.c
+#elif CONFIG_KEYPAD == SAMSUNG_YH820_PAD
+samsung-yh820.c
+#elif CONFIG_KEYPAD == SAMSUNG_YH92X_PAD
+samsung-yh92x.c
+#elif CONFIG_KEYPAD == PBELL_VIBE500_PAD
+pbell-vibe500.c
+#elif CONFIG_KEYPAD == MPIO_HD200_PAD
+mpio-hd200.c
+#elif CONFIG_KEYPAD == MPIO_HD300_PAD
+mpio-hd300.c
+#elif CONFIG_KEYPAD == SANSA_FUZEPLUS_PAD
+sansa-fuzeplus.c
+#elif CONFIG_KEYPAD == CREATIVE_ZENXFI3_PAD
+creative-zenxfi3.c
+#elif CONFIG_KEYPAD == CREATIVE_ZENXFI2_PAD
+creative-zenxfi2.c
+#elif CONFIG_KEYPAD == SANSA_CONNECT_PAD
+sansa-connect.c
+#elif CONFIG_KEYPAD == SONY_NWZ_PAD
+sony-nwz.c
+#elif CONFIG_KEYPAD == SAMSUNG_YPR0_PAD
+samsung-ypr0.c
+#elif CONFIG_KEYPAD == CREATIVE_ZEN_PAD
+creative-zen.c
+#elif CONFIG_KEYPAD == SONY_NWZA860_PAD
+sony-nwza860.c
+#elif CONFIG_KEYPAD == AGPTEK_ROCKER_PAD
+agptek-rocker.c
+#elif CONFIG_KEYPAD == XDUOO_X3_PAD
+xduoo-x3.c
+#elif CONFIG_KEYPAD == XDUOO_X3II_PAD
+xduoo-x3ii.c
+#elif CONFIG_KEYPAD == XDUOO_X20_PAD
+xduoo-x20.c
+#elif (CONFIG_KEYPAD == IHIFI_770_PAD) || (CONFIG_KEYPAD == IHIFI_800_PAD)
+ihifi2.c
+#elif CONFIG_KEYPAD == EROSQ_PAD
+erosq.c
+#elif CONFIG_KEYPAD == FIIO_M3K_PAD
+fiio-m3k.c
+#elif CONFIG_KEYPAD == SHANLING_Q1_PAD
+shanling-q1.c
+#elif CONFIG_KEYPAD == RG_NANO_PAD
+rg-nano.c
+#elif CONFIG_KEYPAD == HIBY_R3PROII_PAD
+hiby-r3proii.c
+#elif CONFIG_KEYPAD == HIDIZS_AP80MAX_PAD
+hidizs-ap80max.c
+#endif
+#endif /* SIMULATOR */

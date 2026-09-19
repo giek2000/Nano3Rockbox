@@ -1,0 +1,179 @@
+\subsection{Image Viewer}
+This plugin opens image files from the \setting{File Browser} to display them\nopt{lcd_color}{ using Rockbox's greyscale library}. Supported formats are as follows.
+
+\begin{table}
+  \begin{rbtabular}{.60\textwidth}{lX}%
+      {\textbf{Format}& \textbf{File-extension(s)}}%
+      {}{}
+    BMP         & \fname{.bmp}                  \\
+    JPEG        & \fname{.jpg, .jpe, .jpeg}     \\
+    PNG         & \fname{.png}                  \\
+    GIF         & \fname{.gif}                  \\
+    \opt{lcd_color}{
+      PPM         & \fname{.ppm}                  \\
+    }
+  \end{rbtabular}
+\end{table}
+
+\opt{large_plugin_buffer}{
+\par
+\note{
+When an audio file is playing the size of the image is limited as 
+the decoding process needs to share memory with audio tracks. To be able to
+view a bigger file you may need to stop playback.}
+}
+\nopt{large_plugin_buffer}{%
+\note{This plugin will cause playback to stop.}%
+}%
+
+\begin{btnmap}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IAUDIO_X5_PAD%
+      ,SANSA_E200_PAD,SANSA_FUZE_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD%
+      ,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD%
+      ,SAMSUNG_YH820_PAD,RG_NANO_PAD}{\ButtonUp\ / \ButtonDown}%
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonMenu\ / \ButtonPlay}%
+    \opt{IRIVER_H10_PAD}{\ButtonScrollUp\ / \ButtonScrollDown} %
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IAUDIO_X5_PAD%
+      ,SANSA_E200_PAD,SANSA_FUZE_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD%
+      ,MROBE100_PAD,IPOD_4G_PAD,IPOD_3G_PAD,IRIVER_H10_PAD,PBELL_VIBE500_PAD%
+      ,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD,RG_NANO_PAD}
+      {/ \ButtonLeft\ / \ButtonRight}
+    \opt{MPIO_HD200_PAD}{\ButtonVolDown / \ButtonVolUp /%
+                         \ButtonRec + \ButtonRew / \ButtonRec + \ButtonFF}
+    \opt{MPIO_HD300_PAD}{\ButtonRew / \ButtonFF /%
+                         \ButtonPlay + \ButtonScrollUp / \ButtonPlay + \ButtonScrollDown}
+    \opt{touchscreen}{\TouchTopMiddle{} / \TouchBottomMiddle{}/ \TouchMidLeft{} / \TouchMidRight}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    & Move around in zoomed in image\\
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IAUDIO_X5_PAD,SANSA_E200_PAD%
+        ,SANSA_FUZE_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,MROBE100_PAD}{\ButtonSelect}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonScrollFwd}
+    \opt{IRIVER_H10_PAD}{\ButtonPlay}
+    \opt{GIGABEAT_PAD,GIGABEAT_S_PAD,SANSA_FUZEPLUS_PAD}{\ButtonVolUp}
+    \opt{PBELL_VIBE500_PAD,SAMSUNG_YH820_PAD}{\ButtonRec+\ButtonUp}
+    \opt{MPIO_HD200_PAD,MPIO_HD300_PAD}{\ButtonPlay}
+    \opt{SAMSUNG_YH92X_PAD}{\ButtonPlay+\ButtonUp}
+    \opt{touchscreen}{\TouchTopRight}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonX}
+    & Zoom in\\
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonMode}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonScrollBack}
+    \opt{IAUDIO_X5_PAD,SANSA_E200_PAD,SANSA_FUZE_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD}{Long \ButtonSelect}
+    \opt{IRIVER_H10_PAD}{Long \ButtonPlay}
+    \opt{GIGABEAT_PAD,GIGABEAT_S_PAD,SANSA_FUZEPLUS_PAD}{\ButtonVolDown}
+    \opt{MROBE100_PAD}{\ButtonPlay}
+    \opt{PBELL_VIBE500_PAD,SAMSUNG_YH820_PAD}{\ButtonRec+\ButtonDown}
+    \opt{MPIO_HD200_PAD,MPIO_HD300_PAD}{\ButtonRec}
+    \opt{SAMSUNG_YH92X_PAD}{\ButtonPlay+\ButtonDown}
+    \opt{touchscreen}{\TouchTopLeft}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonY}
+    & Zoom out\\
+    \opt{IRIVER_H100_PAD}{\ButtonOn}
+    \opt{IRIVER_H300_PAD}{\ButtonRec}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonSelect+\ButtonRight}
+    \opt{IAUDIO_X5_PAD}{\ButtonPlay}
+    \opt{SANSA_FUZEPLUS_PAD}{\ButtonBottomRight}
+    \opt{IRIVER_H10_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonFF}
+    \opt{SANSA_E200_PAD,SANSA_FUZE_PAD}{\ButtonScrollFwd}
+    \opt{SANSA_C200_PAD,SANSA_CLIP_PAD}{\ButtonVolUp}
+    \opt{GIGABEAT_PAD}{\ButtonA+\ButtonRight}
+    \opt{GIGABEAT_S_PAD}{\ButtonNext}
+    \opt{MROBE100_PAD}{\ButtonDisplay+\ButtonRight}
+    \opt{PBELL_VIBE500_PAD}{\ButtonRec+\ButtonRight}
+    \opt{MPIO_HD200_PAD}{\ButtonFF}
+    \opt{MPIO_HD300_PAD}{\ButtonScrollDown}
+    \opt{touchscreen}{\TouchBottomRight}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonR}
+    & Next image in directory\\
+    \opt{IRIVER_H100_PAD,IAUDIO_X5_PAD}{\ButtonRec}
+    \opt{IRIVER_H300_PAD}{\ButtonOn}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonSelect+\ButtonLeft}
+    \opt{IRIVER_H10_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRew}
+    \opt{SANSA_E200_PAD,SANSA_FUZE_PAD}{\ButtonScrollBack}
+    \opt{SANSA_C200_PAD,SANSA_CLIP_PAD}{\ButtonVolDown}
+    \opt{SANSA_FUZEPLUS_PAD}{\ButtonBottomLeft}
+    \opt{GIGABEAT_PAD}{\ButtonA+\ButtonLeft}
+    \opt{GIGABEAT_S_PAD}{\ButtonPrev}
+    \opt{MROBE100_PAD}{\ButtonDisplay+\ButtonLeft}
+    \opt{PBELL_VIBE500_PAD}{\ButtonRec+\ButtonLeft}
+    \opt{MPIO_HD200_PAD}{\ButtonRew}
+    \opt{MPIO_HD300_PAD}{\ButtonScrollUp}
+    \opt{touchscreen}{\TouchBottomLeft}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonL}
+    & Previous image in directory\\
+    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,SANSA_FUZEPLUS_PAD%
+      ,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{%currently only defined for the sansa pads and samsung yh*
+       \opt{SANSA_E200_PAD,SANSA_C200_PAD}{\ButtonRec}
+       \opt{SANSA_CLIP_PAD}{\ButtonHome}
+       \opt{SANSA_FUZEPLUS_PAD}{\ButtonPlay}
+       \opt{SAMSUNG_YH92X_PAD}{\ButtonRec\ switch}
+       \opt{SAMSUNG_YH820_PAD}{Long \ButtonPlay}
+         \opt{HAVEREMOTEKEYMAP}{& }
+        & Toggle slide show mode\\
+    }
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOff}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{Long \ButtonSelect}
+    \opt{IAUDIO_X5_PAD,IRIVER_H10_PAD,SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD}{\ButtonPower}
+    \opt{SANSA_FUZE_PAD}{Long \ButtonHome}
+    \opt{GIGABEAT_PAD,GIGABEAT_S_PAD,MROBE100_PAD,PBELL_VIBE500_PAD}{\ButtonMenu}
+    \opt{MPIO_HD200_PAD}{\ButtonFunc}
+    \opt{MPIO_HD300_PAD}{\ButtonEnter}
+    \opt{touchscreen}{\TouchCenter}
+    \opt{SANSA_FUZEPLUS_PAD}{\ButtonSelect}
+    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonPlay}
+       \opt{HAVEREMOTEKEYMAP}{&
+          \opt{IRIVER_RC_H100_PAD}{\ButtonRCStop}
+       }
+    \opt{RG_NANO_PAD}{\ButtonB}
+    & Show menu / Abort \\
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD,MROBE100_PAD,PBELL_VIBE500_PAD%
+        ,SAMSUNG_YH820_PAD,RG_NANO_PAD}{
+        \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonSelect}
+        \opt{GIGABEAT_PAD,MROBE100_PAD}{\ButtonPower}
+        \opt{GIGABEAT_S_PAD}{\ButtonBack}
+        \opt{PBELL_VIBE500_PAD}{\ButtonCancel}
+        \opt{MPIO_HD200_PAD}{\ButtonRec + \ButtonPlay}
+        \opt{MPIO_HD300_PAD}{Long \ButtonMenu}
+        \opt{SANSA_FUZEPLUS_PAD}{\ButtonBack}
+        \opt{SAMSUNG_YH820_PAD}{\ButtonRec+\ButtonPlay}
+            \opt{HAVEREMOTEKEYMAP}{& }
+        \opt{RG_NANO_PAD}{\ButtonStart}
+        & Quit the viewer \\
+    }
+\end{btnmap}
+
+The menu has the following entries.
+\begin{description}
+\item[Return.] Returns you to the image
+\item[Toggle Slideshow Mode.] Enables or disables the slideshow mode.
+\item[Change Slideshow Timeout.] You can set the timeout for the slideshow
+  between 1 second and 20 seconds.
+\opt{large_plugin_buffer}{
+\item[Show Playback Menu.] From the playback menu you can control the
+playback of the currently loaded playlist and change the volume of your \dap.
+}
+\opt{lcd_color}{
+\item[Display Options.] From this menu you can force the viewer to render the
+image in greyscale using the \setting{Greyscale} option or set the method of
+dithering used in the \setting{Dithering} submenu. These settings only take effect
+for JPEG images.
+}
+\item[Quit.] Quits the viewer and returns to the \setting{File Browser}.
+\end{description}
+
+\note{
+\opt{lcd_color}{Progressive scan is supported. Unsupported JPEG files}
+\nopt{lcd_color}{Progressive scan and other unusual JPEG files are not supported, and} will
+result in various ``unsupported xx'' messages. Processing could also fail if the
+image is too big to decode which will be explained by a respective message.
+
+\opt{lcd_color}{
+  Supported PPM files are both ASCII PPM (P3) and raw PPM (P6).
+  For more information about PPM files, see
+  \url{http://netpbm.sourceforge.net/doc/ppm.html}
+}
+}

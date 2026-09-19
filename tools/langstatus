@@ -1,0 +1,58 @@
+#!/bin/sh
+
+if [ "wiki" = "$1" ]; then
+    echo "As of `LC_ALL=C date +'%d %b %Y'`, the current status of the translations is the following:"
+    echo "|   *Language*   |   *Missing strings*   |   *Changed desc*   |   *Changed source*   | *Missing translation* | *Missing voice* |"
+    FORMAT="|%s|   %d|   %d|   %d|\n"
+else
+    echo ".----------------------.-----------------.--------------.----------------.---------------.---------------."
+    echo "| Language             | Missing strings | Changed desc | Changed source | Missing trans | Missing voice |"
+    echo "|----------------------|-----------------|--------------|----------------|---------------|---------------|"
+    FORMAT="| %-20s | %15d | %12d | %14d | %13d | %13d |\n"
+fi
+
+UPDLANG=`dirname $0`/updatelang
+LANGDIR=`dirname $0`/../apps/lang
+ENGLISH="$LANGDIR"/english.lang
+
+(for LANGFILE in $LANGDIR/*.lang; do
+    LANGUAGE=`basename $LANGFILE .lang |sed -e "s/^\(.\)/\U\1/"`
+
+
+    $UPDLANG $ENGLISH $LANGFILE - |grep "^###" |(
+        MISSING=0
+        CHANGE_DESC=0
+        CHANGE_SRC=0
+	MISS_DEST=0
+	MISS_VOICE=0
+
+        while read LINE; do
+            case $LINE in
+                "### The phrase "*)
+                    MISSING=`expr $MISSING + 1`
+                ;;
+                "### The 'desc' field for"*|"### The 'user' field for"*)
+                    CHANGE_DESC=`expr $CHANGE_DESC + 1`
+                ;;
+                "### The <source> section for"*)
+                    CHANGE_SRC=`expr $CHANGE_SRC + 1`
+                ;;
+                "### The <dest> section for"*)
+                    MISS_DEST=`expr $MISS_DEST + 1`
+                ;;
+                "### The <voice> section for"*)
+                    MISS_VOICE=`expr $MISS_VOICE + 1`
+                ;;
+
+                *)
+                    #echo $LINE
+                ;;
+            esac
+        done
+        printf "$FORMAT" "$LANGUAGE" "$MISSING" "$CHANGE_DESC" "$CHANGE_SRC" "$MISS_DEST" "$MISS_VOICE"
+    )
+done) 2>/dev/null
+
+if [ "wiki" != "$1" ]; then
+    echo "'----------------------'-----------------'--------------'----------------'---------------'----------------'"
+fi

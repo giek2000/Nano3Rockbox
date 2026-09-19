@@ -1,0 +1,65 @@
+/***************************************************************************
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
+ *
+ * All files in this archive are subject to the GNU General Public License.
+ * See the file COPYING in the source tree root for full license agreement.
+ *
+ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+ * KIND, either express or implied.
+ *
+ ****************************************************************************/
+
+This is Rockbox Utility, the graphical installer and housekeeping utility
+for Rockbox.
+
+Requirements:
+=============
+- C++ compiler (GCC and Clang are known to work)
+- Qt 6
+- qt6-tools-dev
+- qt6-5compat-dev
+- qt6-svg-dev
+- qt6-multimedia-dev
+- qt6-network-dev
+
+- at least the following folders from Rockbox tree:
+  o lib/rbcodec/codecs/libspeex
+  o utils/
+  o tools/
+- libusb (Linux only)
+
+Building:
+=========
+- create a build directory somewhere, cd to it
+- run 'cmake /path/to/rockbox/utils'
+- run make
+eg. mkdir build-rbutil ; cd tbuild-rbutil ; cmake ../utils ; make
+
+Build Options:
+==============
+There are no build options to set by the user. If your Qt installation is not
+in the PATH or a standard search location you might need to set
+CMAKE_PREFIX_PATH to point to it.
+(*Note this probably has to be done on the command line defining
+ doesn't appear to work..*)
+
+Installation / Deployment:
+==========================
+For deployment the generated build system contains a target
+deploy_RockboxUtility (there's also a target deploy which will also deploy
+other tools.) Depending on the system deployment will create a zip file
+(Windows), dmg (MacOS) or AppImage (Linux).
+
+The script utils/common/tarball-rbutil.py automates building a source archive.
+For a complete list of paths to get from the repository to build please check
+its source.
+
+The website for Rockbox Utility is
+https://www.rockbox.org/wiki/RockboxUtility
+
+//

@@ -1,0 +1,365 @@
+/***************************************************************************
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
+ *
+ * Copyright (C) 2008 Dan Everton (safetydan)
+ * Copyright (C) 2018 William Wilgus
+ * String function implementations taken from dietlibc 0.31 (GPLv2 License)
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+ * KIND, either express or implied.
+ *
+ ****************************************************************************/
+
+#include "lua.h"
+#include "rocklibc.h" /* ROCKLUA ADDED */
+
+#ifdef PLUGIN
+#include "plugin.h"
+#include "lib/pluginlib_actions.h"
+#define font_getstringsize rb->font_getstringsize
+#define lcd_clear_display rb->lcd_clear_display
+#define lcd_putsxy        rb->lcd_putsxy
+#define lcd_update        rb->lcd_update
+#define beep_play         rb->beep_play
+#define get_action        rb->get_action
+#if 0 /* ndef _WIN32 -- supplied by strfrtime.lua */
+#define gmtime_r          rb->gmtime_r
+#endif
+#endif /* def PLUGIN*/
+
+extern const char *strpbrk_n(const char *s, int smax, const char *accept);
+
+#if (CONFIG_PLATFORM & PLATFORM_NATIVE)
+int errno = 0;
+#endif
+
+#if (CONFIG_PLATFORM & PLATFORM_NATIVE) /* hosted platforms supply these */
+char *strerror(int errnum)
+{
+    (void) errnum;
+
+    DEBUGF("strerror(%d)\n", errnum);
+
+    return NULL;
+}
+#endif
+
+/* splash string and allow user to scroll around
+ * provides rudimentary text reflow
+ * timeout is disabled on user interaction
+ * returns the action that caused quit
+ * [ACTION_NONE, ACTION_STD_CANCEL, ACTION_STD_OK]
+ * !ACTION_NONE (only on initial timeout)!
+ * TIMEOUT can be TIMEOUT_BLOCK or time in ticks
+*/
+int splash_scroller(int timeout, const char* str)
+{
+    if (!str)
+        str = "[nil]";
+    int w, ch_w, ch_h;
+
+    struct viewport vp;
+    rb->viewport_set_defaults(&vp, SCREEN_MAIN);
+    struct viewport *last_vp = rb->lcd_set_viewport(&vp);
+    int fontnum = vp.font;
+
+    if (fontnum == FONT_UI)
+    {
+        fontnum = rb->global_status->font_id[SCREEN_MAIN];
+        if (fontnum == FONT_SYSFIXED)
+            fontnum = FONT_UI;
+    }
+    font_getstringsize("W", &ch_w, &ch_h, fontnum);
+
+    const int max_w = LCD_WIDTH;
+    const int max_lines = LCD_HEIGHT / ch_h - 1;
+    const int wrap_thresh = (LCD_WIDTH / 4);
+
+    const int max_ch = (LCD_WIDTH / ch_w - 1) * 3;
+    char line[max_ch + 2]; /* display buffer +2 incase of tab chars */
+    const char break_chars[] = "/\\ \r\n\f\v";
+    const char *ch, *brk;
+
+    int linepos, curline, linesdisp, maxl, last_break;
+    int realline = 0;
+    int action = ACTION_NONE;
+    int firstline = 0;
+    int cycles = 2; /* get action timeout returns immediately on first call */
+    while (cycles > 0)
+    {
+        /* walk whole buffer every refresh, only display relevant portion */
+        lcd_clear_display();
+        curline = 0;
+        linesdisp = 0;
+        last_break = 0;
+        ch = str;
+        while(*ch != '\0')
+        {
+            linepos = 0;
+            brk = NULL;
+
+            maxl = rb->font_measurestring(ch, max_ch, max_w, &w, NULL, fontnum);
+
+            for (; *ch && linepos < maxl; ch++)
+            {
+                if (strpbrk_n(ch, 1, break_chars))
+                {
+                    last_break = linepos;
+                    brk = ch;
+                    if (!isgraph(*brk)) /*!isprint() || isspace()*/
+                        brk++;
+                    if (*ch == '\n')
+                    {
+                        ch++;
+                        break;
+                    }
+                }
+                if (ch[0] == '\t')
+                {
+                    line[linepos++] = ' ';
+                    line[linepos] = ' ';
+                    if(maxl == max_ch)
+                        maxl-=2;
+                }
+                else if (ch[0] == '\b' || ch[0] == '\a')
+                {
+                    if (timeout > 0)
+                    {
+                        beep_play(1000, HZ, 1000);
+                    }
+                    continue;
+                }
+                else if (ch[0] < ' ' && ch[0] > '\0') /* Dont copy control characters */
+                {
+                    continue;
+                }
+                else
+                {
+                    line[linepos++] = ch[0];
+                }
+            }
+            line[linepos] = '\0';
+
+            /* try to not split in middle of words */
+            if (last_break > 0 && *ch != '\0')
+            {
+                if ((!strpbrk_n(ch, 1, break_chars)) &&
+                   (w + wrap_thresh > max_w && strpbrk_n(ch, max_ch, break_chars)))
+                {
+                    line[last_break] = '\0';
+                    ch = brk;
+                }
+            }
+            realline = curline - firstline;
+            if (realline >= 0 && realline < max_lines)
+            {
+                lcd_putsxy(0, realline * ch_h, line);
+                linesdisp++;
+                last_break = 0;
+            }
+            if (linepos == maxl && isspace(*ch)) /* we would have split at this space if we could see it */
+                ch++;
+            curline++;
+        }
+
+        if (realline >= max_lines)
+        {
+            rb->lcd_hline(10, LCD_WIDTH - 10, LCD_HEIGHT - 1);
+        }
+
+        lcd_update();
+        if (timeout >= TIMEOUT_BLOCK)
+        {
+            action = get_action(CONTEXT_STD, timeout);
+            switch(action)
+            {
+                case ACTION_STD_OK:
+                case ACTION_STD_CANCEL:
+                    cycles--;
+                /* Fall Through */
+                case ACTION_NONE:
+                    cycles--;
+                    break;
+                case ACTION_STD_PREV:
+                    timeout = TIMEOUT_BLOCK; /* disable timeout */
+                    if(firstline > 0)
+                        firstline--;
+                    break;
+                case ACTION_STD_NEXT:
+                    timeout = TIMEOUT_BLOCK; /* disable timeout */
+                    if (linesdisp == max_lines)
+                        firstline++;
+                    break;
+            }
+        }
+        else
+            break;
+    }
+    rb->lcd_set_viewport(last_vp);
+
+    return action;
+}
+
+long rb_pow(long x, long n)
+{
+    long pow = 1;
+    unsigned long u;
+
+    if(n <= 0)
+    {
+        if(n == 0 || x == 1)
+            return 1;
+
+        if(x != -1)
+            return x != 0 ? 1/x : 0;
+
+        n = -n;
+    }
+
+    u = n;
+    while(1)
+    {
+        if(u & 01)
+            pow *= x;
+
+        if(u >>= 1)
+            x *= x;
+        else
+            break;
+    }
+
+    return pow;
+}
+
+#if (CONFIG_PLATFORM & PLATFORM_NATIVE) /* hosted platforms supply these */
+int strcoll(const char * str1, const char * str2)
+{
+    return strcmp(str1, str2);
+}
+#endif
+
+#if 0 //ndef _WIN32  /* supplied by strfrtime.lua*/
+struct tm * gmtime(const time_t *timep)
+{
+    static struct tm time;
+    return gmtime_r(timep, &time);
+}
+#endif
+
+int get_current_path(lua_State *L, int level)
+{
+    lua_Debug ar;
+
+    if(lua_getstack(L, level, &ar))
+    {
+        /* Try determining the base path of the current Lua chunk
+            and write it to dest. */
+        lua_getinfo(L, "S", &ar);
+
+        const char* curfile = &ar.source[1];
+        const char* pos = strrchr(curfile, '/');
+        if(pos != NULL)
+        {
+            lua_pushlstring (L, curfile, pos - curfile + 1);
+            return 1;
+        }
+    }
+
+    lua_pushnil(L);
+    return 1;
+}
+
+/* filetol()
+   reads long int from an open file, skips preceding
+   whitespaces returns -1 if error, 1 on success.
+   *num set to LONG_MAX or LONG_MIN on overflow.
+   If number of digits is > than LUAI_MAXNUMBER2STR
+   filepointer will continue till the next non digit
+   but buffer will stop being filled with characters.
+   Preceding zero is ignored
+*/
+int filetol(int fd, long *num)
+{
+    static char buffer[LUAI_MAXNUMBER2STR];
+    int    retn = -1;
+    char   chbuf = 0;
+    size_t count = 0;
+    bool   neg   = false;
+    long   val;
+
+    while (read(fd, &chbuf, 1) == 1)
+    {
+        if(retn || !isspace(chbuf))
+        {
+            switch(chbuf)
+            {
+                case '-':
+                {
+                    if (retn > 0) /* 0 preceeds, this negative sign must be in error */
+                        goto get_digits;
+                    neg = true;
+                    continue;
+                }
+                case '0':  /* strip preceeding zeros */
+                {
+                    *num = 0;
+                    retn = 1;
+                    continue;
+                }
+                default:
+                    goto get_digits;
+            }
+        }
+    }
+
+    while (read(fd, &chbuf, 1) == 1)
+    {
+get_digits:
+        if(!isdigit(chbuf))
+        {
+            lseek(fd, -1, SEEK_CUR);
+            break;
+        }
+        else if (count < LUAI_MAXNUMBER2STR - 2)
+            buffer[count++] = chbuf;
+    }
+
+    if(count)
+    {
+        buffer[count] = '\0';
+        val = strtol(buffer, NULL, 10);
+        *num = (neg)? -val:val;
+        retn = 1;
+    }
+
+    return retn;
+}
+
+int get_plugin_action(int timeout, bool with_remote)
+{
+    static const struct button_mapping *m1[] = { pla_main_ctx };
+    int btn;
+
+#ifndef HAVE_REMOTE_LCD
+    (void) with_remote;
+#else
+    static const struct button_mapping *m2[] = { pla_main_ctx, pla_remote_ctx };
+
+    if (with_remote)
+        btn = pluginlib_getaction(timeout, m2, 2);
+    else
+#endif
+    btn = pluginlib_getaction(timeout, m1, 1);
+
+    return btn;
+}

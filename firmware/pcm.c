@@ -1,0 +1,652 @@
+/***************************************************************************
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
+ *
+ * Copyright (C) 2007 by Michael Sevakis
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+ * KIND, either express or implied.
+ *
+ ****************************************************************************/
+#include <stdlib.h>
+#include "system.h"
+#include "kernel.h"
+#include "panic.h"
+
+/* Define LOGF_ENABLE to enable logf output in this file */
+//#define LOGF_ENABLE
+#include "logf.h"
+#include "audio.h"
+#include "sound.h"
+#include "general.h"
+#include "pcm-internal.h"
+#include "pcm_mixer.h"
+#include "pcm_sw_volume.h"
+
+/**
+ * Aspects implemented in the target-specific portion:
+ *
+ * ==Playback==
+ *   Public -
+ *      pcm_postinit
+ *      pcm_play_lock
+ *      pcm_play_unlock
+ *   Semi-private -
+ *      pcm_play_dma_complete_callback
+ *      pcm_play_dma_status_callback
+ *      pcm_get_current_sink
+ *      pcm_sink.init
+ *      pcm_sink.postinit
+ *      pcm_sink.play
+ *      pcm_sink.stop
+ *   Data Read/Written within TSP -
+ *      pcm_playing (R)
+ *
+ * ==Playback/Recording==
+ *   Public -
+ *      pcm_dma_addr
+ *   Semi-private -
+ *      pcm_sink.set_freq
+ *
+ * ==Recording==
+ *   Public -
+ *      pcm_rec_lock
+ *      pcm_rec_unlock
+ *   Semi-private -
+ *      pcm_rec_dma_complete_callback
+ *      pcm_rec_dma_status_callback
+ *      pcm_rec_dma_init
+ *      pcm_rec_dma_close
+ *      pcm_rec_dma_start
+ *      pcm_rec_dma_stop
+ *      pcm_rec_dma_get_peak_buffer
+ *   Data Read/Written within TSP -
+ *      pcm_recording (R)
+ *
+ * States are set _after_ the target's pcm driver is called so that it may
+ * know from whence the state is changed. One exception is init.
+ *
+ */
+
+/* 'true' when all stages of pcm initialization have completed */
+static volatile bool pcm_is_ready[PCM_SINK_NUM] SHAREDBSS_ATTR = { false };
+
+#ifdef USB_ENABLE_IAP
+extern struct pcm_sink iap_pcm_sink;
+#endif
+
+static struct pcm_sink* sinks[PCM_SINK_NUM] = {
+    [PCM_SINK_BUILTIN] = &builtin_pcm_sink,
+#ifdef USB_ENABLE_IAP
+    [PCM_SINK_IAP] = &iap_pcm_sink,
+#endif
+};
+static enum pcm_sink_ids cur_sink SHAREDBSS_ATTR = PCM_SINK_BUILTIN;
+
+/* The registered callback function to ask for more mp3 data */
+volatile pcm_play_callback_type
+    pcm_callback_for_more SHAREDBSS_ATTR = NULL;
+/* The registered callback function to inform of DMA status */
+volatile pcm_status_callback_type
+    pcm_play_status_callback SHAREDBSS_ATTR = NULL;
+/* PCM playback state */
+volatile bool pcm_playing SHAREDBSS_ATTR = false;
+
+struct pcm_sink* pcm_get_current_sink(void)
+{
+    return sinks[cur_sink];
+}
+
+/** Standard hw volume/unbuffered control functions - otherwise, see
+ ** pcm_sw_volume.c **/
+static inline void pcm_play_dma_start_int(const void *addr, size_t size)
+{
+#ifdef WANT_SWVOL
+    if (sinks[cur_sink]->caps.volume_type == PCM_SINK_SWVOL) {
+        pcm_play_dma_start_int_swvol(addr, size);
+        return;
+    }
+    /* Smoothed transition might not have happened so sync now */
+    pcm_sync_pcm_factors();
+#endif
+    sinks[cur_sink]->ops.play(addr, size);
+}
+
+static inline void pcm_play_dma_stop_int(void)
+{
+#ifdef WANT_SWVOL
+    if (sinks[cur_sink]->caps.volume_type == PCM_SINK_SWVOL) {
+        pcm_play_dma_stop_int_swvol();
+        return;
+    }
+#endif
+    sinks[cur_sink]->ops.stop();
+}
+
+bool pcm_play_dma_complete_callback(enum pcm_dma_status status,
+                                    const void **addr, size_t *size)
+{
+#ifdef WANT_SWVOL
+    if (sinks[cur_sink]->caps.volume_type == PCM_SINK_SWVOL) {
+        return pcm_play_dma_complete_callback_swvol(status, addr, size);
+    }
+#endif
+    /* Check status callback first if error */
+    if (status < PCM_DMAST_OK)
+        status = pcm_play_dma_status_callback(status);
+
+    if (status >= PCM_DMAST_OK && pcm_get_more_int(addr, size)) {
+        return true;
+    }
+
+    /* Error, callback missing or no more DMA to do */
+    pcm_play_stop_int();
+    return false;
+}
+
+void pcm_play_stop_int(void)
+{
+    pcm_play_dma_stop_int();
+    pcm_callback_for_more = NULL;
+    pcm_play_status_callback = NULL;
+    pcm_playing = false;
+}
+
+static void pcm_wait_for_init(void)
+{
+    while (!pcm_is_ready[cur_sink])
+        sleep(0);
+}
+
+/**
+ * Perform peak calculation on a buffer of packed 16-bit samples.
+ *
+ * Used for recording and playback.
+ */
+static void pcm_peak_peeker(const int16_t *p, int count,
+                            struct pcm_peaks *peaks)
+{
+    uint32_t peak_l = 0, peak_r = 0;
+    const int16_t *pend = p + 2 * count;
+
+    do
+    {
+        int32_t s;
+
+        s = p[0];
+
+        if (s < 0)
+            s = -s;
+
+        if ((uint32_t)s > peak_l)
+            peak_l = s;
+
+        s = p[1];
+
+        if (s < 0)
+            s = -s;
+
+        if ((uint32_t)s > peak_r)
+            peak_r = s;
+
+        p += 4 * 2; /* Every 4th sample, interleaved */
+    }
+    while (p < pend);
+
+    peaks->left = peak_l;
+    peaks->right = peak_r;
+}
+
+void pcm_do_peak_calculation(struct pcm_peaks *peaks, bool active,
+                             const void *addr, int count)
+{
+    long tick = current_tick;
+
+    /* Peak no farther ahead than expected period to avoid overcalculation */
+    long period = tick - peaks->tick;
+
+    /* Keep reasonable limits on period */
+    if (period < 1)
+        period = 1;
+    else if (period > HZ/5)
+        period = HZ/5;
+
+    peaks->period = (3*peaks->period + period) / 4;
+    peaks->tick = tick;
+
+    if (active)
+    {
+        struct pcm_sink* sink = sinks[cur_sink];
+        if (sink->configured_freq == -1U)
+        {
+            logf("not configured yet");
+            return;
+        }
+
+        unsigned long sampr = sink->caps.samprs[sink->configured_freq];
+        int framecount = peaks->period * sampr / HZ;
+        count = MIN(framecount, count);
+
+        if (count > 0)
+            pcm_peak_peeker(addr, count, peaks);
+        /* else keep previous peak values */
+    }
+    else
+    {
+        /* peaks are zero */
+        peaks->left = peaks->right = 0;
+    }
+}
+
+bool pcm_is_playing(void)
+{
+    return pcm_playing;
+}
+
+/****************************************************************************
+ * Functions that do not require targeted implementation but only a targeted
+ * interface
+ */
+
+void pcm_play_lock(void) {
+    sinks[cur_sink]->ops.lock();
+}
+
+void pcm_play_unlock(void) {
+    sinks[cur_sink]->ops.unlock();
+}
+
+/* This should only be called at startup before any audio playback or
+   recording is attempted */
+void pcm_init(void)
+{
+    logf("pcm_init");
+
+    for(size_t i = 0; i < PCM_SINK_NUM; i += 1) {
+        struct pcm_sink* sink = sinks[i];
+        pcm_is_ready[i] = false;
+        sink->pending_freq = sink->caps.default_freq;
+        sink->configured_freq = -1U;
+        sink->ops.init();
+    }
+}
+
+/* Finish delayed init */
+void pcm_postinit(void)
+{
+    logf("pcm_postinit");
+
+    for(size_t i = 0; i < PCM_SINK_NUM; i += 1) {
+        struct pcm_sink* sink = sinks[i];
+        sink->ops.postinit();
+        pcm_is_ready[i] = true;
+    }
+
+    /* Ensure mixer is in a sane state */
+    mixer_set_frequency(pcm_get_frequency());
+}
+
+bool pcm_is_initialized(void)
+{
+    return pcm_is_ready[cur_sink];
+}
+
+enum pcm_sink_ids pcm_current_sink(void)
+{
+    return cur_sink;
+}
+
+const struct pcm_sink_caps* pcm_sink_caps(enum pcm_sink_ids sink)
+{
+    return &sinks[sink]->caps;
+}
+
+const struct pcm_sink_caps* pcm_current_sink_caps(void)
+{
+    return pcm_sink_caps(pcm_current_sink());
+}
+
+bool pcm_switch_sink(enum pcm_sink_ids sink)
+{
+    logf("pcm_switch_sink %d to %d", cur_sink, sink);
+    if(sink >= PCM_SINK_NUM) {
+        return false;
+    }
+
+    if(cur_sink == sink) {
+        return true;
+    }
+
+    /*
+     * If PCM_SINK_NUM == 1, GCC 9.5 can infer that cur_sink
+     * must be nonzero here (because of the above checks) and
+     * issue a -Warray-bounds warning. This only happens on
+     * some architectures (ARM), and oddly enough, only when
+     * cur_sink is an enum type.
+     *
+     * Since this situation isn't possible outside of memory
+     * corruption we can just tell the compiler to assume it
+     * can't happen. This avoids the warning, and saves a bit
+     * of code size since none of the code below is reachable
+     * when there's only one PCM sink.
+     */
+    ASSUME(cur_sink < PCM_SINK_NUM);
+
+    /* save current sink before switching */
+    struct pcm_sink* old_sink = sinks[cur_sink];
+
+    /* update sink index */
+    cur_sink = sink;
+    /* synchronize frequency */
+    unsigned long cur_sampr = old_sink->caps.samprs[old_sink->pending_freq];
+    pcm_set_frequency(cur_sampr);
+    pcm_apply_settings();
+    /* when playing, continue playing on new sink */
+    if(pcm_playing) {
+        old_sink->ops.stop();
+        /* need more */
+        const void *start;
+        size_t size;
+        if(pcm_get_more_int(&start, &size)) {
+            pcm_play_dma_start_int(start, size);
+        } else {
+            pcm_play_stop_int();
+        }
+    }
+
+    return true;
+}
+
+void pcm_play_data(pcm_play_callback_type get_more,
+                   pcm_status_callback_type status_cb,
+                   const void *start, size_t size)
+{
+    logf("pcm_play_data");
+
+    pcm_play_lock();
+
+    pcm_callback_for_more = get_more;
+    pcm_play_status_callback = status_cb;
+
+    ALIGN_AUDIOBUF(start, size);
+    if ((start && size) || pcm_get_more_int(&start, &size))
+    {
+        pcm_apply_settings();
+        logf(" pcm_play_dma_start_int");
+        pcm_play_dma_start_int(start, size);
+        pcm_playing = true;
+    }
+    else
+    {
+        /* Force a stop */
+        logf(" pcm_play_stop_int");
+        pcm_play_stop_int();
+    }
+
+    pcm_play_unlock();
+}
+
+void pcm_play_stop(void)
+{
+    logf("pcm_play_stop");
+
+    pcm_play_lock();
+
+    if (pcm_playing)
+    {
+        logf(" pcm_play_stop_int");
+        pcm_play_stop_int();
+    }
+
+    pcm_play_unlock();
+}
+
+/**/
+
+/* set frequency next frequency used by the audio hardware -
+ * what pcm_apply_settings will set */
+void pcm_set_frequency(unsigned int samplerate)
+{
+    logf("pcm_set_frequency %u", samplerate);
+
+    int index;
+
+#ifdef CONFIG_SAMPR_TYPES
+    unsigned int type = samplerate & SAMPR_TYPE_MASK;
+    samplerate &= ~SAMPR_TYPE_MASK;
+
+    /* For now, supported targets have direct conversion when configured with
+     * CONFIG_SAMPR_TYPES.
+     * Some hypothetical target with independent rates would need slightly
+     * different handling throughout this source. */
+    samplerate = pcm_sampr_to_hw_sampr(samplerate, type);
+#endif /* CONFIG_SAMPR_TYPES */
+
+    struct pcm_sink* sink = sinks[cur_sink];
+    index = round_value_to_list32(samplerate, sink->caps.samprs, sink->caps.num_samprs, false);
+
+    if (samplerate != sink->caps.samprs[index])
+        index = sink->caps.default_freq; /* Invalid = default */
+
+    sink->pending_freq = index;
+}
+
+/* return last-set frequency */
+unsigned int pcm_get_frequency(void)
+{
+    struct pcm_sink* sink = sinks[cur_sink];
+    return sink->caps.samprs[sink->pending_freq];
+}
+
+/* apply pcm settings to the hardware */
+void pcm_apply_settings(void)
+{
+    logf("pcm_apply_settings");
+
+    pcm_wait_for_init();
+
+    struct pcm_sink* sink = sinks[cur_sink];
+    if(sink->pending_freq != sink->configured_freq) {
+        logf(" sink->set_freq");
+        sink->ops.set_freq(sink->pending_freq);
+        sink->configured_freq = sink->pending_freq;
+    }
+}
+
+#ifdef HAVE_RECORDING
+/** Low level pcm recording apis **/
+
+/* Next start for recording peaks */
+static const void * volatile pcm_rec_peak_addr SHAREDBSS_ATTR = NULL;
+/* the registered callback function for when more data is available */
+static volatile pcm_rec_callback_type
+    pcm_callback_more_ready SHAREDBSS_ATTR = NULL;
+volatile pcm_status_callback_type
+    pcm_rec_status_callback SHAREDBSS_ATTR = NULL;
+/* DMA transfer in is currently active */
+volatile bool pcm_recording SHAREDBSS_ATTR = false;
+
+/* Called internally by functions to reset the state */
+static void pcm_recording_stopped(void)
+{
+    pcm_recording = false;
+    pcm_callback_more_ready = NULL;
+    pcm_rec_status_callback = NULL;
+}
+
+/**
+ * Return recording peaks - From the end of the last peak up to
+ *                          current write position.
+ */
+void pcm_calculate_rec_peaks(int *left, int *right)
+{
+    static struct pcm_peaks peaks;
+
+    if (pcm_recording)
+    {
+        const int16_t *peak_addr = pcm_rec_peak_addr;
+        const int16_t *addr = pcm_rec_dma_get_peak_buffer();
+
+        if (addr != NULL)
+        {
+            int count = (addr - peak_addr) / 2; /* Interleaved L+R */
+
+            if (count > 0)
+            {
+                pcm_peak_peeker(peak_addr, count, &peaks);
+
+                if (peak_addr == pcm_rec_peak_addr)
+                    pcm_rec_peak_addr = addr;
+            }
+        }
+        /* else keep previous peak values */
+    }
+    else
+    {
+        peaks.left = peaks.right = 0;
+    }
+
+    if (left)
+        *left = peaks.left;
+
+    if (right)
+        *right = peaks.right;
+}
+
+bool pcm_is_recording(void)
+{
+    return pcm_recording;
+}
+
+/****************************************************************************
+ * Functions that do not require targeted implementation but only a targeted
+ * interface
+ */
+
+void pcm_init_recording(void)
+{
+    logf("pcm_init_recording");
+
+    pcm_wait_for_init();
+
+    /* Stop the beasty before attempting recording */
+    mixer_reset();
+
+    /* Recording init is locked unlike general pcm init since this is not
+     * just a one-time event at startup and it should and must be safe by
+     * now. */
+    pcm_rec_lock();
+
+    logf(" pcm_rec_dma_init");
+    pcm_recording_stopped();
+    pcm_rec_dma_init();
+
+    pcm_rec_unlock();
+}
+
+void pcm_close_recording(void)
+{
+    logf("pcm_close_recording");
+
+    pcm_rec_lock();
+
+    if (pcm_recording)
+    {
+        logf(" pcm_rec_dma_stop");
+        pcm_rec_dma_stop();
+        pcm_recording_stopped();
+    }
+
+    logf(" pcm_rec_dma_close");
+    pcm_rec_dma_close();
+
+    pcm_rec_unlock();
+}
+
+void pcm_record_data(pcm_rec_callback_type more_ready,
+                     pcm_status_callback_type status_cb,
+                     void *addr, size_t size)
+{
+    logf("pcm_record_data");
+
+    ALIGN_AUDIOBUF(addr, size);
+
+    if (!(addr && size))
+    {
+        logf(" no buffer");
+        return;
+    }
+
+    pcm_rec_lock();
+
+    pcm_callback_more_ready = more_ready;
+    pcm_rec_status_callback = status_cb;
+
+    /* Need a physical DMA address translation, if not already physical. */
+    pcm_rec_peak_addr = pcm_rec_dma_addr(addr);
+
+    logf(" pcm_rec_dma_start");
+    pcm_apply_settings();
+    pcm_rec_dma_start(addr, size);
+    pcm_recording = true;
+
+    pcm_rec_unlock();
+} /* pcm_record_data */
+
+void pcm_stop_recording(void)
+{
+    logf("pcm_stop_recording");
+
+    pcm_rec_lock();
+
+    if (pcm_recording)
+    {
+        logf(" pcm_rec_dma_stop");
+        pcm_rec_dma_stop();
+        pcm_recording_stopped();
+    }
+
+    pcm_rec_unlock();
+} /* pcm_stop_recording */
+
+bool pcm_rec_dma_complete_callback(enum pcm_dma_status status,
+                                   void **addr, size_t *size)
+{
+     /* Check status callback first if error */
+    if (status < PCM_DMAST_OK)
+        status = pcm_rec_dma_status_callback(status);
+
+    pcm_rec_callback_type have_more = pcm_callback_more_ready;
+
+    if (have_more && status >= PCM_DMAST_OK)
+    {
+        /* Call registered callback to obtain next buffer */
+        have_more(addr, size);
+        ALIGN_AUDIOBUF(*addr, *size);
+
+        if (*addr && *size)
+        {
+            /* Need a physical DMA address translation, if not already
+             * physical. */
+            pcm_rec_peak_addr = pcm_rec_dma_addr(*addr);
+            return true;
+        }
+    }
+
+    /* Error, callback missing or no more DMA to do */
+    pcm_rec_dma_stop();
+    pcm_recording_stopped();
+
+    return false;
+}
+
+#endif /* HAVE_RECORDING */

@@ -1,0 +1,11 @@
+[Desktop Entry]
+GenericName=Rockbox Installer and Maintainance Tool
+Hidden=false
+Name=Rockbox Utility
+Type=Application
+Terminal=false
+StartupNotify=true
+Icon=rockbox-clef
+Exec=RockboxUtility
+Categories=Utility;
+

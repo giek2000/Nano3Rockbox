@@ -1,0 +1,23 @@
+#ifdef SIMULATOR
+
+lcd-common.c
+sim_tasks.c
+fmradio.c
+backlight-sim.c
+powermgmt-sim.c
+filesystem-sim.c
+
+#ifdef WIN32
+time-win32.c
+#endif
+
+#ifndef __PCTOOL__
+load_code-sim.c
+#endif
+
+stubs.c
+
+#else
+dummylib.c /* for now, so the lib actually builds */
+#endif /* SIMULATOR */
+

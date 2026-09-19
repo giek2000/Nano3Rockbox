@@ -1,0 +1,39 @@
+#if defined(CPU_ARM)
+asm/arm/memcpy.S
+asm/arm/memmove.S
+asm/arm/memset.S
+asm/arm/atomic_rw.S
+asm/arm/system.S
+#elif defined(CPU_MIPS)
+asm/mips/memcpy.S
+asm/mips/memset.S
+asm/mips/atomic_rw.S
+asm/mips/system.S
+#else
+#error "Unimplemented ISA"
+#endif
+main.c
+logf.c
+string.c
+format.c
+#ifdef CONFIG_STMP
+stmp/crt0.S
+stmp/target.c
+usb_drv_arc.c
+#elif defined(CONFIG_RK27XX)
+rk27xx/crt0.S
+rk27xx/usb_drv_rk27xx.c
+rk27xx/target.c
+#elif defined(CONFIG_PP)
+pp/crt0.S
+pp/target.c
+usb_drv_arc.c
+#elif defined(CONFIG_ATJ213X)
+atj213x/crt0.S
+atj213x/target.c
+atj213x/usb_drv_atj213x.c
+#elif defined(CONFIG_JZ4760B)
+jz4760b/crt0.S
+jz4760b/target.c
+jz4760b/usb_drv_jz4760b.c
+#endif

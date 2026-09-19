@@ -1,0 +1,865 @@
+/***************************************************************************
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
+ *
+ *   Copyright (C) 2007 by Dominik Wenger
+ *
+ * All files in this archive are subject to the GNU General Public License.
+ * See the file COPYING in the source tree root for full license agreement.
+ *
+ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+ * KIND, either express or implied.
+ *
+ ****************************************************************************/
+
+#include "utils.h"
+#include "rockboxinfo.h"
+#include "system.h"
+#include "rbsettings.h"
+#include "playerbuildinfo.h"
+#include "Logger.h"
+
+#if !defined(_UNICODE)
+#define _UNICODE
+#endif
+
+#include <QtCore>
+#include <QDebug>
+#include <QStorageInfo>
+#include <QStandardPaths>
+#include <QDirIterator>
+#include <cstdlib>
+#include <stdio.h>
+
+#if defined(Q_OS_LINUX) || defined(Q_OS_MACOS)
+#include <sys/statvfs.h>
+#endif
+#if defined(Q_OS_LINUX) || defined(Q_OS_MACOS)
+#include <stdio.h>
+#endif
+#if defined(Q_OS_LINUX)
+#include <mntent.h>
+#endif
+#if defined(Q_OS_MACOS) || defined(Q_OS_OPENBSD)
+#include <sys/param.h>
+#include <sys/ucred.h>
+#include <sys/mount.h>
+#endif
+#if defined(Q_OS_WIN32)
+#include <stdio.h>
+#include <tchar.h>
+#include <windows.h>
+#include <setupapi.h>
+#include <winioctl.h>
+#include <tlhelp32.h>
+#endif
+#if defined(Q_OS_MACOS)
+#include <libproc.h>
+#include <signal.h>
+#endif
+
+// recursive function to delete a dir with files
+bool Utils::recursiveRmdir(const QString &dirName)
+{
+    QString dirN = dirName;
+    QDir dir(dirN);
+    // make list of entries in directory
+    QStringList list = dir.entryList(QDir::AllEntries | QDir::NoDotAndDotDot);
+    QFileInfo fileInfo;
+    QString curItem;
+    for(int i = 0; i < list.size(); i++){ // loop through all items of list
+        QString name = list.at(i);
+        curItem = dirN + "/" + name;
+        fileInfo.setFile(curItem);
+        if(fileInfo.isDir())    // is directory
+            recursiveRmdir(curItem);    // call recRmdir() recursively for
+                                        // deleting subdirectory
+        else                    // is file
+            QFile::remove(curItem);     // ok, delete file
+    }
+    dir.cdUp();
+    return dir.rmdir(dirN); // delete empty dir and return if (now empty)
+                            // dir-removing was successfull
+}
+
+
+//! @brief resolves the given path, ignoring case.
+//! @param path absolute path to resolve.
+//! @return returns exact casing of path, empty string if path not found.
+QString Utils::resolvePathCase(QString path)
+{
+    int start;
+    QString realpath;
+    QStringList elems = path.split("/", Qt::SkipEmptyParts);
+
+    if(path.isEmpty())
+        return QString();
+#if defined(Q_OS_WIN32)
+    // on windows we must make sure to start with the first entry (i.e. the
+    // drive letter) instead of a single / to make resolving work.
+    start = 1;
+    realpath = elems.at(0) + "/";
+#else
+    start = 0;
+    realpath = "/";
+#endif
+
+    for(int i = start; i < elems.size(); i++) {
+        QStringList direlems
+            = QDir(realpath).entryList(QDir::AllEntries|QDir::Hidden|QDir::System);
+        if(direlems.contains(elems.at(i), Qt::CaseInsensitive)) {
+            // need to filter using QRegExp as QStringList::filter(QString)
+            // matches any substring
+            QString expr = QString("^" + elems.at(i) + "$");
+            QRegularExpression rx = QRegularExpression(expr,
+                    QRegularExpression::CaseInsensitiveOption);
+            QStringList a = direlems.filter(rx);
+
+            if(a.size() != 1)
+                return QString("");
+            if(!realpath.endsWith("/"))
+                realpath += "/";
+            realpath += a.at(0);
+        }
+        else
+            return QString("");
+    }
+    LOG_INFO() << "resolving path" << path << "->" << realpath;
+    return realpath;
+}
+
+
+QString Utils::filesystemType(QString path)
+{
+    QStorageInfo storage(path);
+    if (storage.isValid()) {
+        QString fsType = QString::fromLocal8Bit(storage.fileSystemType());
+        LOG_INFO() << "device type is" << fsType;
+        return fsType;
+    }
+    return QString("-");
+}
+
+
+QString Utils::filesystemName(const QString &path)
+{
+    QString name = QStorageInfo(path).displayName();
+    LOG_INFO() << "Volume name of" << path << "is" << name;
+    return name;
+}
+
+
+//! @brief figure the free disk space on a filesystem
+//! @param path path on the filesystem to check
+//! @return size in bytes
+qulonglong Utils::filesystemFree(QString path)
+{
+    QStorageInfo storage(path);
+    if (!storage.isValid()) {
+        return 0;
+    }
+
+    qulonglong size = storage.bytesAvailable();
+    LOG_INFO() << "free disk space for" << path << size;
+    return size;
+}
+
+
+qulonglong Utils::filesystemTotal(QString path)
+{
+    QStorageInfo storage(path);
+    if (!storage.isValid()) {
+        return 0;
+    }
+
+    qulonglong size = storage.bytesTotal();
+    LOG_INFO() << "total disk space for" << path << size;
+    return size;
+}
+
+
+qulonglong Utils::filesystemClusterSize(QString path)
+{
+    qulonglong size = 0;
+#if defined(Q_OS_LINUX) || defined(Q_OS_MACOS)
+    struct statvfs fs;
+    if (statvfs(qPrintable(path), &fs) == 0) {
+        size = (qulonglong)fs.f_frsize;
+    }
+#elif defined(Q_OS_WIN32)
+    DWORD sectorsPerCluster;
+    DWORD bytesPerSector;
+    DWORD dummy;
+
+    if (GetDiskFreeSpaceW((LPCWSTR)path.utf16(), &sectorsPerCluster,
+                          &bytesPerSector, &dummy, &dummy)) {
+        size = bytesPerSector * sectorsPerCluster;
+    }
+#endif
+    return size;
+}
+
+//! \brief searches for a Executable in the Environement Path
+QString Utils::findExecutable(QString name)
+{
+    QString executable = QStandardPaths::findExecutable(name);
+    if (!executable.isEmpty()) {
+        LOG_INFO() << "findExecutable: found" << executable;
+        return QDir::toNativeSeparators(executable);
+    }
+    LOG_INFO() << "findExecutable: could not find" << name;
+    return "";
+}
+
+
+/** @brief checks different Enviroment things. Ask if user wants to continue.
+ *  @param permission if it should check for permission
+ *  @return string with error messages if problems occurred, empty strings if none.
+ */
+QString Utils::checkEnvironment(bool permission)
+{
+    LOG_INFO() << "checking environment";
+    QString text = "";
+
+    // check permission
+    if(permission)
+    {
+#if defined(Q_OS_WIN32)
+        if(System::userPermissions() != System::ADMIN)
+        {
+            text += tr("<li>Permissions insufficient for bootloader "
+                    "installation.\nAdministrator priviledges are necessary.</li>");
+        }
+#endif
+    }
+
+    // Check TargetId
+    RockboxInfo rbinfo(RbSettings::value(RbSettings::Mountpoint).toString());
+    QString installed = rbinfo.target();
+    if(!installed.isEmpty() && installed !=
+       RbSettings::value(RbSettings::CurrentPlatform).toString().split(".").at(0))
+    {
+        text += tr("<li>Target mismatch detected.<br/>"
+                "Installed target: %1<br/>Selected target: %2.</li>")
+            .arg(PlayerBuildInfo::instance()->value(
+                     PlayerBuildInfo::DisplayName, installed).toString(),
+                 PlayerBuildInfo::instance()->value(
+                     PlayerBuildInfo::DisplayName).toString());
+    }
+
+    if(!text.isEmpty())
+        return tr("Problem detected:") + "<ul>" + text + "</ul>";
+    else
+        return text;
+}
+
+/** @brief Trim version string from filename to version part only.
+ *  @param s Version string
+ *  @return Version part of string if found, input string on error.
+ */
+QString Utils::trimVersionString(QString s)
+{
+    QRegularExpression r = QRegularExpression("^\\D*([\\d\\.]+\\d+[a-z]?).*");
+    QRegularExpressionMatch match = r.match(s);
+    if(match.hasMatch()) {
+        return match.captured(1);
+    }
+    return s;
+}
+
+/** @brief Compare two version strings.
+ *  @param s1 first version string
+ *  @param s2 second version string
+ *  @return 0 if strings identical, 1 if second is newer, -1 if first.
+ */
+int Utils::compareVersionStrings(QString s1, QString s2)
+{
+    LOG_INFO() << "comparing version strings" << s1 << "and" << s2;
+    QString a = s1.trimmed();
+    QString b = s2.trimmed();
+    // if strings are identical return 0.
+    if(a.isEmpty())
+        return 1;
+    if(b.isEmpty())
+        return -1;
+
+    while(!a.isEmpty() || !b.isEmpty()) {
+        // trim all leading non-digits and non-dots (dots are removed afterwards)
+        a.remove(QRegularExpression("^[^\\d\\.]*"));
+        b.remove(QRegularExpression("^[^\\d\\.]*"));
+
+        // trim all trailing non-digits for conversion (QString::toInt()
+        // requires this). Copy strings first as replace() changes the string.
+        QString numa = a;
+        QString numb = b;
+        numa.remove(QRegularExpression("\\D+.*$"));
+        numb.remove(QRegularExpression("\\D+.*$"));
+
+        // convert to number
+        bool ok1, ok2;
+        unsigned int vala = numa.toUInt(&ok1);
+        unsigned int valb = numb.toUInt(&ok2);
+        // if none of the numbers converted successfully we're at trailing garbage.
+        if(!ok1 && !ok2)
+            break;
+        if(!ok1)
+            return 1;
+        if(!ok2)
+            return -1;
+
+        // if numbers mismatch we have a decision.
+        if(vala != valb)
+            return (vala > valb) ? -1 : 1;
+
+        // trim leading digits.
+        a.remove(QRegularExpression("^\\d*"));
+        b.remove(QRegularExpression("^\\d*"));
+
+        // If only one of the following characters is a dot that one is
+        // "greater" then anything else. Make sure it's followed by a number,
+        // Otherwise it might be the end of the string or suffix.  Do this
+        // before version addon characters check to avoid stopping too early.
+        bool adot = a.contains(QRegularExpression("^[a-zA-Z]*\\.[0-9]"));
+        bool bdot = b.contains(QRegularExpression("^[a-zA-Z]*\\.[0-9]"));
+        if(adot && !bdot)
+            return -1;
+        if(!adot && bdot)
+            return 1;
+        // if number is immediately followed by a character consider it as
+        // version addon (like 1.2.3b). In this case compare characters and end
+        // (version numbers like 1.2b.3 aren't handled).
+        QChar ltra;
+        QChar ltrb;
+        if(a.contains(QRegularExpression("^[a-zA-Z]")))
+            ltra = a.at(0);
+        if(b.contains(QRegularExpression("^[a-zA-Z]")))
+            ltrb = b.at(0);
+        if(ltra != ltrb)
+            return (ltra < ltrb) ? 1 : -1;
+
+        // both are identical or no addon characters, ignore.
+        // remove modifiers and following dot.
+        a.remove(QRegularExpression("^[a-zA-Z]*\\."));
+        b.remove(QRegularExpression("^[a-zA-Z]*\\."));
+    }
+
+    // no differences found.
+    return 0;
+}
+
+
+/** Resolve mountpoint to devicename / disk number
+ *  @param path mountpoint path / drive letter
+ *  @return devicename / disk number
+ */
+QString Utils::resolveDevicename(QString path)
+{
+    LOG_INFO() << "resolving device name" << path;
+#if defined(Q_OS_LINUX)
+    FILE *mn = setmntent("/etc/mtab", "r");
+    if(!mn)
+        return QString("");
+
+    struct mntent *ent;
+    while((ent = getmntent(mn))) {
+        // check for valid filesystem type.
+        // Linux can handle hfs (and hfsplus), so consider it a valid file
+        // system. Otherwise resolving the device name would fail, which in
+        // turn would make it impossible to warn about a MacPod.
+        if(QString(ent->mnt_dir) == path
+           && (QString(ent->mnt_type).contains("vfat", Qt::CaseInsensitive)
+            || QString(ent->mnt_type).contains("hfs", Qt::CaseInsensitive))) {
+            endmntent(mn);
+            LOG_INFO() << "device name is" << ent->mnt_fsname;
+            return QString(ent->mnt_fsname);
+        }
+    }
+    endmntent(mn);
+
+#endif
+
+#if defined(Q_OS_MACOS) || defined(Q_OS_OPENBSD)
+    int num;
+    struct statfs *mntinf;
+
+    num = getmntinfo(&mntinf, MNT_WAIT);
+    while(num--) {
+        // check for valid filesystem type. OS X can handle hfs (hfs+ is
+        // treated as hfs), BSD should be the same.
+        if(QString(mntinf->f_mntonname) == path
+           && (QString(mntinf->f_fstypename).contains("msdos", Qt::CaseInsensitive)
+            || QString(mntinf->f_fstypename).contains("hfs", Qt::CaseInsensitive))) {
+            LOG_INFO() << "device name is" << mntinf->f_mntfromname;
+            return QString(mntinf->f_mntfromname);
+        }
+        mntinf++;
+    }
+#endif
+
+#if defined(Q_OS_WIN32)
+    DWORD written;
+    HANDLE h;
+    TCHAR uncpath[MAX_PATH];
+    UCHAR buffer[0x400];
+    PVOLUME_DISK_EXTENTS extents = (PVOLUME_DISK_EXTENTS)buffer;
+
+    _stprintf(uncpath, _TEXT("\\\\.\\%c:"), path.toLatin1().at(0));
+    h = CreateFile(uncpath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+            NULL, OPEN_EXISTING, 0, NULL);
+    if(h == INVALID_HANDLE_VALUE) {
+        //LOG_INFO() << "error getting extents for" << uncpath;
+        return "";
+    }
+    // get the extents
+    if(DeviceIoControl(h, IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS,
+                NULL, 0, extents, sizeof(buffer), &written, NULL)) {
+        if(extents->NumberOfDiskExtents == 1) {
+            CloseHandle(h);
+            LOG_INFO() << "device name is" << extents->Extents[0].DiskNumber;
+            return QString("%1").arg(extents->Extents[0].DiskNumber);
+        }
+        LOG_INFO() << "resolving device name: volume spans multiple disks!";
+    }
+    CloseHandle(h);
+#endif
+    return QString("");
+
+}
+
+
+/** resolve device name to mount point / drive letter
+ *  @param device device name / disk number
+ *  @return mount point / drive letter
+ */
+QString Utils::resolveMountPoint(QString device)
+{
+    LOG_INFO() << "resolving mountpoint:" << device;
+
+#if defined(Q_OS_LINUX)
+    FILE *mn = setmntent("/etc/mtab", "r");
+    if(!mn)
+        return QString("");
+
+    struct mntent *ent;
+    while((ent = getmntent(mn))) {
+        // Check for valid filesystem. Allow hfs too, as an Ipod might be a
+        // MacPod.
+        if(QString(ent->mnt_fsname) == device) {
+            QString result;
+            if(QString(ent->mnt_type).contains("vfat", Qt::CaseInsensitive)
+                    || QString(ent->mnt_type).contains("hfs", Qt::CaseInsensitive)) {
+                LOG_INFO() << "resolved mountpoint is:" << ent->mnt_dir;
+                result = QString(ent->mnt_dir);
+            }
+            else {
+                LOG_INFO() << "mountpoint is wrong filesystem!";
+            }
+            endmntent(mn);
+            return result;
+        }
+    }
+    endmntent(mn);
+
+#endif
+
+#if defined(Q_OS_MACOS) || defined(Q_OS_OPENBSD)
+    int num;
+    struct statfs *mntinf;
+
+    num = getmntinfo(&mntinf, MNT_WAIT);
+    while(num--) {
+        // Check for valid filesystem. Allow hfs too, as an Ipod might be a
+        // MacPod.
+        if(QString(mntinf->f_mntfromname) == device) {
+            if(QString(mntinf->f_fstypename).contains("msdos", Qt::CaseInsensitive)
+                || QString(mntinf->f_fstypename).contains("hfs", Qt::CaseInsensitive)) {
+                LOG_INFO() << "resolved mountpoint is:" << mntinf->f_mntonname;
+                return QString(mntinf->f_mntonname);
+            }
+            else {
+                LOG_INFO() << "mountpoint is wrong filesystem!";
+                return QString();
+            }
+        }
+        mntinf++;
+    }
+#endif
+
+#if defined(Q_OS_WIN32)
+    QString result;
+    unsigned int driveno = device.replace(QRegularExpression("^.*([0-9]+)"), "\\1").toInt();
+
+    char letter;
+    for(letter = 'A'; letter <= 'Z'; letter++) {
+        if(resolveDevicename(QString(letter)).toUInt() == driveno) {
+            result = letter;
+            LOG_INFO() << "resolved mountpoint is:" << result;
+            break;
+        }
+    }
+    if(!result.isEmpty())
+        return result + ":/";
+#endif
+    LOG_INFO() << "resolving mountpoint failed!";
+    return QString("");
+}
+
+
+QStringList Utils::mountpoints(enum MountpointsFilter type)
+{
+    QStringList supported;
+    QStringList paths;
+
+    // Note: QStorageInfo::fileSystemType() result is platform-dependant!
+#if defined(Q_OS_WIN32)
+    supported = {"FAT32", "FAT16", "FAT12", "FAT", "HFS"};
+#elif defined(Q_OS_MACOS) || defined(Q_OS_OPENBSD)
+    supported = {"vfat", "msdos", "hfs"}; // vfat might not be needed
+#elif defined(Q_OS_LINUX)
+    supported = {"vfat", "msdos", "hfsplus"}; // hfs might be needed, too
+#else
+#error Unknown Platform
+#endif
+
+    for (const QStorageInfo &storage : QStorageInfo::mountedVolumes()) {
+        if (!storage.isValid() || storage.isReadOnly()) {
+            continue;
+        }
+
+        QString fsType = QString::fromLocal8Bit(storage.fileSystemType());
+        QString rootPath = storage.rootPath();
+
+        if (type == MountpointsAll || supported.contains(fsType, Qt::CaseInsensitive)) {
+            paths << rootPath;
+            LOG_INFO() << "Added:" << rootPath << "type" << fsType;
+        } else {
+            LOG_INFO() << "Ignored:" << rootPath << "type" << fsType;
+        }
+    }
+
+    return paths;
+}
+
+
+/** Check if a process with a given name is running
+ *  @param names list of names to filter on. All processes if empty list.
+ *  @return list of processname, process ID pairs.
+ */
+QMap<QString, QList<int> > Utils::findRunningProcess(QStringList names)
+{
+    QMap<QString, QList<int> > processlist;
+    QMap<QString, QList<int> > found;
+#if defined(Q_OS_WIN32)
+    HANDLE hdl;
+    PROCESSENTRY32 entry;
+    bool result;
+
+    hdl = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if(hdl == INVALID_HANDLE_VALUE) {
+        LOG_ERROR() << "CreateToolhelp32Snapshot failed.";
+        return found;
+    }
+    entry.dwSize = sizeof(PROCESSENTRY32);
+    entry.szExeFile[0] = '\0';
+    if(!Process32First(hdl, &entry)) {
+        LOG_ERROR() << "Process32First failed.";
+        return found;
+    }
+
+    do {
+        int pid = entry.th32ProcessID;  // FIXME: DWORD vs int!
+        QString name = QString::fromWCharArray(entry.szExeFile);
+        if(processlist.find(name) == processlist.end()) {
+            processlist.insert(name, QList<int>());
+        }
+        processlist[name].append(pid);
+        entry.dwSize = sizeof(PROCESSENTRY32);
+        entry.szExeFile[0] = '\0';
+        result = Process32Next(hdl, &entry);
+    } while(result);
+    CloseHandle(hdl);
+#endif
+#if defined(Q_OS_MACOS)
+    int bufferSize = proc_listallpids(nullptr, 0);
+    if (bufferSize <= 0) {
+        LOG_ERROR() << "proc_listallpids failed.";
+        return found;
+    }
+
+    int count = bufferSize / sizeof(pid_t);
+    QVector<pid_t> pids(count);
+    bufferSize = proc_listallpids(pids.data(), (int)(pids.size() * sizeof(pid_t)));
+
+    if (bufferSize <= 0) {
+        LOG_ERROR() << "proc_listallpids failed (2).";
+        return found;
+    }
+
+    char pathBuffer[PROC_PIDPATHINFO_MAXSIZE];
+
+    for (int i = 0; i < count; ++i) {
+        pid_t pid = pids[i];
+        if (pid <= 0) continue;
+
+        // Get executable path
+        int ret = proc_pidpath(pid, pathBuffer, sizeof(pathBuffer));
+        if (ret <= 0) continue;
+
+        QString fullPath = QString::fromUtf8(pathBuffer);
+
+        // Extract process name from path
+        QString name = QFileInfo(fullPath).fileName();
+
+        if (name.isEmpty())
+            continue;
+
+        if (!processlist.contains(name)) {
+            processlist.insert(name, QList<int>());
+        }
+
+        processlist[name].append(pid);
+    }
+#endif
+#if defined(Q_OS_LINUX)
+    // not implemented for Linux!
+#endif
+    //  Filter for names (unless empty)
+    if(names.size() > 0) {
+        for(int i = 0; i < names.size(); ++i) {
+            QStringList k(processlist.keys());
+#if defined(Q_OS_WIN32)
+            // the process name might be truncated. Allow the extension to be partial.
+            int index = k.indexOf(QRegularExpression(names.at(i) + "(\\.(e(x(e?)?)?)?)?",
+                                  QRegularExpression::CaseInsensitiveOption));
+#else
+            int index = k.indexOf(names.at(i));
+#endif
+            if(index != -1) {
+                found.insert(k[index], processlist[k[index]]);
+            }
+        }
+    }
+    else {
+        found = processlist;
+    }
+    LOG_INFO() << "Looking for processes" << names << "found" << found;
+    return found;
+}
+
+
+/** Suspends/resumes processes
+ *  @param pidlist a list of PIDs to suspend/resume
+ *  @param suspend processes are suspended if true, or resumed when false
+ *  @return a list of PIDs successfully suspended/resumed
+ */
+QList<int> Utils::suspendProcess(QList<int> pidlist, bool suspend)
+{
+    QList<int> result;
+#if defined(Q_OS_WIN32)
+    // Enable debug privilege
+    HANDLE hToken = NULL;
+    LUID seDebugValue;
+    TOKEN_PRIVILEGES tNext, tPrev;
+    DWORD sPrev;
+    if(LookupPrivilegeValue(NULL, SE_DEBUG_NAME, &seDebugValue)) {
+        if(OpenProcessToken(GetCurrentProcess(),
+                    TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken)) {
+            memset(&tNext, 0, sizeof(tNext));
+            tNext.PrivilegeCount = 1;
+            tNext.Privileges[0].Luid = seDebugValue;
+            tNext.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
+            if(!AdjustTokenPrivileges(hToken, FALSE, &tNext, sizeof(tNext),
+                                        &tPrev, &sPrev) || GetLastError() != 0) {
+                CloseHandle(hToken);
+                hToken = NULL;
+                LOG_ERROR() << "AdjustTokenPrivileges(next) error" << GetLastError();
+            }
+        }
+        else {
+            LOG_ERROR() << "OpenProcessToken error" << GetLastError();
+        }
+    }
+    else {
+        LOG_ERROR() << "LookupPrivilegeValue error" << GetLastError();
+    }
+
+    // Suspend/resume threads
+    for(int i = 0; i < pidlist.size(); i++) {
+        HANDLE hdl = INVALID_HANDLE_VALUE;
+        THREADENTRY32 entry;
+        int n_fails = 0;
+
+        hdl = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        if(hdl == INVALID_HANDLE_VALUE) {
+            LOG_ERROR() << "CreateToolhelp32Snapshot error" << GetLastError();
+            continue;
+        }
+        entry.dwSize = sizeof(THREADENTRY32);
+        if(!Thread32First(hdl, &entry)) {
+            LOG_ERROR() << "Process32First error" << GetLastError();
+            CloseHandle(hdl);
+            continue;
+        }
+
+        do {
+            if(entry.th32OwnerProcessID != (DWORD)(pidlist[i]))
+                continue;
+            HANDLE thr = OpenThread(THREAD_SUSPEND_RESUME,
+                                        FALSE, entry.th32ThreadID);
+            if(!thr) {
+                LOG_ERROR() << "OpenThread" << entry.th32ThreadID
+                            << "error" << GetLastError();
+                n_fails++;
+                continue;
+            }
+            if(suspend) {
+                // Execution of the specified thread is suspended and
+                // the thread's suspend count is incremented.
+                if(SuspendThread(thr) == (DWORD)(-1)) {
+                    LOG_ERROR() << "SuspendThread" << entry.th32ThreadID
+                                << "error" << GetLastError();
+                    n_fails++;
+                }
+            }
+            else {
+                // Decrements a thread's suspend count. When the
+                // suspend count is decremented to zero, the
+                // execution of the thread is resumed.
+                if(ResumeThread(thr) == (DWORD)(-1)) {
+                    LOG_ERROR() << "ResumeThread" << entry.th32ThreadID
+                                << "error" << GetLastError();
+                    n_fails++;
+                }
+            }
+            CloseHandle(thr);
+        } while(Thread32Next(hdl, &entry));
+        if (!n_fails)
+            result.append(pidlist[i]);
+        CloseHandle(hdl);
+    }
+
+    // Restore previous debug privilege
+    if (hToken) {
+        if(!AdjustTokenPrivileges(hToken, FALSE,
+                    &tPrev, sPrev, NULL, NULL) || GetLastError() != 0) {
+            LOG_ERROR() << "AdjustTokenPrivileges(prev) error" << GetLastError();
+        }
+        CloseHandle(hToken);
+    }
+#endif
+#if defined(Q_OS_MACOS)
+    int signal = suspend ? SIGSTOP : SIGCONT;
+    for(int i = 0; i < pidlist.size(); i++) {
+        pid_t pid = pidlist[i];
+        if(kill(pid, signal) != 0) {
+            LOG_ERROR() << "kill signal" << signal
+                        << "for PID" << pid << "error:" << errno;
+        }
+        else {
+            result.append(pidlist[i]);
+        }
+    }
+#endif
+#if defined(Q_OS_LINUX)
+    // not implemented for Linux!
+#endif
+    LOG_INFO() << (suspend ? "Suspending" : "Resuming")
+               << "PIDs" << pidlist << "result" << result;
+    return result;
+}
+
+
+/** Eject device from PC.
+ *  Request the OS to eject the player.
+ *  @param device mountpoint of the device
+ *  @return true on success, fals otherwise.
+ */
+bool Utils::ejectDevice(const QString &device)
+{
+#if defined(Q_OS_WIN32)
+    /* See http://support.microsoft.com/kb/165721 on the procedure to eject a
+     * device. */
+    bool success = false;
+    int i;
+    HANDLE hdl;
+    DWORD bytesReturned;
+    TCHAR volume[8];
+
+    /* CreateFile */
+    _stprintf(volume, _TEXT("\\\\.\\%c:"), device.toLatin1().at(0));
+    hdl = CreateFile(volume, GENERIC_READ | GENERIC_WRITE,
+            FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+            OPEN_EXISTING, 0, NULL);
+    if(hdl == INVALID_HANDLE_VALUE)
+        return false;
+
+    /* lock volume to make sure no other application is accessing the volume.
+     * Try up to 10 times. */
+    for(i = 0; i < 10; i++) {
+        if(DeviceIoControl(hdl, FSCTL_LOCK_VOLUME,
+                    NULL, 0, NULL, 0, &bytesReturned, NULL))
+            break;
+        /* short break before retry */
+        Sleep(100);
+    }
+    if(i < 10) {
+        /* successfully locked, now dismount */
+        if(DeviceIoControl(hdl, FSCTL_DISMOUNT_VOLUME,
+                    NULL, 0, NULL, 0, &bytesReturned, NULL)) {
+            /* make sure media can be removed. */
+            PREVENT_MEDIA_REMOVAL pmr;
+            pmr.PreventMediaRemoval = false;
+            if(DeviceIoControl(hdl, IOCTL_STORAGE_MEDIA_REMOVAL,
+                        &pmr, sizeof(PREVENT_MEDIA_REMOVAL),
+                        NULL, 0, &bytesReturned, NULL)) {
+                /* eject the media */
+                if(DeviceIoControl(hdl, IOCTL_STORAGE_EJECT_MEDIA,
+                            NULL, 0, NULL, 0, &bytesReturned, NULL))
+                    success = true;
+            }
+        }
+    }
+    /* close handle */
+    CloseHandle(hdl);
+    return success;
+
+#endif
+#if defined(Q_OS_MACOS)
+    // Use DADiskUnmount / DiskArbitration framework eventually.
+    QStorageInfo info(device);
+    if (!info.isValid())
+        return false;
+
+    QString mountPoint = info.rootPath();
+
+    QProcess proc;
+    proc.start("/usr/sbin/diskutil", {"eject", mountPoint});
+    if (!proc.waitForFinished())
+        return false;
+
+    return proc.exitStatus() == QProcess::NormalExit &&
+           proc.exitCode() == 0;
+#endif
+#if defined(Q_OS_LINUX)
+    (void)device;
+    // TODO: eject [<device>|<mountPoint>] or
+    // udisksctl unmount -b <device> && udisksctl power-off -b <device>
+#endif
+    return false;
+}
+
+
+qint64 Utils::recursiveFolderSize(QString path)
+{
+    qint64 size = 0;
+    QDirIterator it(path, QDir::Files | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        it.next();
+        size += it.fileInfo().size();
+    }
+    return size;
+}

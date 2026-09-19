@@ -1,0 +1,391 @@
+\chapter{\label{ref:config_file_options}Config file options}
+\begin{center}
+% define a local version of endhead, as using the output distinction adds
+% an unwanted newline. endhead breaks with htlatex so we need to remove it
+% for the html output.
+\Ifpdfoutput{\newcommand{\localendhead}{\endhead}}%
+    {\newcommand{\localendhead}{}}
+  \rowcolors{2}{tbloddrowbgcolor}{tblevenrowbgcolor}
+  \begin{longtable}{>{\raggedright}p{.3\textwidth}>{\raggedright}p{.4\textwidth}p{.2\textwidth}}
+    \toprule
+    \rowcolor{tblhdrbgcolor}\tblhdrstrut\textbf{Setting} & \textbf{Allowed Values} & \textbf{Unit}\\
+    \midrule\localendhead % endhead breaks with htlatex
+    volume      & \opt{iriverh100,iriverh300}{$-84$ to 0}%
+                  \opt{ipodnano}{$-72$ to +6}%
+                  \opt{ipodvideo,cowond2}{$-89$ to +6}%
+                  \opt{iaudiom3,iaudiom5,iaudiox5}{$-73$ to +6}%
+                  \opt{fuzeplus}{$-99$ to +6}%
+                  \opt{e200,e200v2,ipodcolor,mrobe100,vibe500,ipodnano2g}{$-74$ to +6}%
+                  \opt{samsungyh}{$-128$ to 0}%
+                                        & dB\\
+    bass        & \opt{iriverh100,iriverh300}{0 to +24}%
+                  \opt{ipod,mrobe100}{$-6$ to +9}%
+                  \opt{iaudiom3,iaudiom5,iaudiox5,e200,e200v2,vibe500,fuzeplus,%
+                       samsungyh}{$-24$ to +24}%
+                                        & dB\\
+    treble      & \opt{iriverh100,iriverh300}{0 to +6}%
+                  \opt{ipod,mrobe100}{$-6$ to +9}%
+                  \opt{iaudiom3,iaudiom5,iaudiox5,e200,e200v2,vibe500,fuzeplus,%
+                       samsungyh}{$-24$ to +24}%
+                                        & dB\\
+    balance         & $-100$ to +100    & \%\\
+    channels        & stereo, mono, custom, mono left, mono right, karaoke
+                                        & N/A\\
+    stereo\_width   & 0 to 250          & \%\\
+    shuffle         & on, off               & N/A\\
+    repeat          & off, all, one, shuffle, ab
+                                        & N/A\\
+    play selected   & on, off           & N/A\\
+    single mode     & off, track, album, album artist, artist, composer, work, genre, playlist
+                    & N/A\\
+    party mode      & on, off           & N/A\\
+    scan min step   & 1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 25, 30, 45, 60
+                                        & s\\
+    seek acceleration & very fast, fast, normal, slow, very slow & N/A\\
+    antiskip        & 5s, 15s, 30s, 1min, 2min, 3min, 5min, 10min & N/A\\
+    volume fade     & on, off           & N/A\\
+    root menu order & - (i.e. a hyphen to reset to default) or a
+                    comma-separated list of (a subset of) the following words,
+                    with no spaces around the commas: bookmarks, files, database, wps,
+                    settings, playlists, plugins, system\_menu, shortcuts & N/A\\
+    sort case       & on, off           & N/A\\
+    show files      & all, supported, music, playlists & N/A\\
+    show filename exts & off, on, unknown, view\_all & N/A\\
+    keep directory  & on, off           & N/A\\
+    follow playlist & on, off           & N/A\\
+    playlist viewer icons
+                    & on, off           & N/A\\
+    playlist viewer indices
+                    & on, off           & N/A\\
+    playlist viewer track display
+                    & track name,full path,title and album from tags,title from tags
+                                        & N/A\\
+    recursive directory insert
+                    & on, off, ask      & N/A\\
+    scroll speed    & 1 to 25           & Hz\\
+    scroll delay    & 0 to 2500         & ms\\
+    scroll step     & \fixme{devise a way to get ranges from config-*.h} & pixels\\
+    screen scroll step & \fixme{devise a way to get ranges from config-*.h} & pixels\\
+    Screen Scrolls Out Of View & on, off & N/A\\
+    Disable main menu scrolling & on, off & N/A\\
+    bidir limit     & 0 to 200          & \% screen\\
+    scroll paginated & on, off & N/A\\
+    list wraparound & on, off & N/A\\
+    list order      & ascending, descending & N/A\\
+    hold\_lr\_for\_scroll\_in\_list & on, off & N/A\\
+    show path in browser & off, current directory, full path & N/A\\
+    contrast        & 0 to 63           & N/A\\
+    backlight timeout
+                    & off, on, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30,
+                      45, 60, 90, 120        & s\\
+    backlight timeout plugged
+                    & off, on, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30,
+                      45, 60, 90, 120        & s\\
+    backlight filters first keypress & on, off & N/A\\
+    backlight on button hold & normal, off, on & N/A\\
+    caption backlight & on, off & N/A\\
+    brightness      & \fixme{devise a way to get ranges from config-*.h} & N/A\\
+    \opt{compositevideoout}{
+      composite video output & off, auto, on & N/A\\
+    }
+    disk spindown   & 3 to 254          & s\\
+    battery capacity & \fixme{devise a way to get ranges from config-*.h} & mAh\\
+    \opt{HAVE_CAR_ADAPTER_MODE}{
+      car adapter mode & on, off & N/A\\
+    }
+    \opt{accessory_supply}{
+      accessory power supply & on, off & N/A\\
+    }
+    \opt{usb_hid}{
+        usb hid & on, off & N/A\\
+        usb keypad mode
+                    & multimedia, presentation, browser\opt{usb_hid_mouse}{, mouse}& N/A\\
+    }
+    \opt{multidrive_usb}{
+        usb skip first drive & on, off & N/A\\
+    }
+    \opt{quickscreen}{
+        qs top & any setting name, $-$ for none & N/A\\
+        qs bottom & any setting name, $-$ for none & N/A\\
+        qs left & any setting name, $-$ for none & N/A\\
+        qs right & any setting name, $-$ for none & N/A\\
+        shortcuts instead of quickscreen & off, on & N/A\\
+    }
+
+    idle poweroff   & off, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 30, 45, 60
+                                        & min\\
+    show shutdown message & off, on     & N/A\\
+    sleeptimer duration   & 5 to 300 (in steps of 5)
+                                        & min\\
+    sleeptimer on startup & off, on     & N/A\\
+    keypress restarts sleeptimer & off, on & N/A\\
+    max files in playlist & 1000 to 32000 & N/A\\
+    max files in dir & 50 to 10000       & N/A\\
+    lang            & /path/filename.lng & N/A\\
+    wps             & /path/filename.wps & N/A\\
+    autocreate bookmarks
+                    & off, on           & N/A\\
+    autoupdate bookmarks
+                    & off, on           & N/A\\
+    autoload bookmarks
+                    & off, on           & N/A\\
+    use most-recent-bookmarks
+                    & off, on, unique only, one per track & N/A\\
+    pause on headphone unplug & off, pause, pause and resume & N/A\\
+    rewind duration on pause & 0 to 15  & s\\
+    disable autoresume if phones not present & off, on & N/A\\
+    Last.fm Logging & off, on           & N/A\\
+    \opt{albumart}{
+    album art
+                    & off, prefer embedded, prefer image file & N/A\\
+    }
+    talk dir        & off, number, spell& N/A\\
+    talk dir clip   & off, on           & N/A\\
+    talk file       & off, number, spell& N/A\\
+    talk file clip  & off, on           & N/A\\
+    talk filetype   & off, on           & N/A\\
+    talk menu       & off, on           & N/A\\
+    Announce Battery Level & off, on    & N/A\\
+    \opt{hotkey}{
+    hotkey wps      & off, view playlist, show track info,
+        pitchscreen, open with, delete  & N/A\\
+    \nopt{touchscreen}{hotkey tree      & off, properties, pictureflow, open with,
+        delete, insert, insert shuffled & N/A\\}
+    }
+    sort files      & alpha, oldest, newest, type & N/A\\
+    sort playlists  & alpha, oldest, newest & N/A\\
+    sort dirs       & alpha, oldest, newest & N/A\\
+    sort interpret number & digits, numbers & N/A\\
+    tagcache\_autoupdate
+                    & on, off           & N/A\\
+    warn when erasing dynamic playlist
+                    & on, off           & N/A\\
+    show shuffled adding options
+                    & off, on        & N/A\\
+    show queue options
+                    & off, on, in submenu & N/A\\
+    cuesheet support
+                    & on, off           & N/A\\
+    folder navigation & off, on, random & N/A\\
+    constrain next folder & off, on     & N/A\\
+    gather runtime data & off, on       & N/A\\
+    \opt{usb_charging_enable}{
+      usb charging  & on, off, force    & N/A\\
+    }
+    skip length     & outro, track, 1s, 2s, 3s, 5s, 7s, 10s, 15s, 20s, 1min,
+            90s, 2min, 3min, 5min, 10min, 15min & N/A\\
+    prevent track skip
+                    & on, off           & N/A\\
+    rewind across tracks
+                    & on, off           & N/A\\
+    start in screen & previous, root, files, dB, wps, menu,
+      \opt{recording}{recording, }
+      \opt{radio}{radio, }
+      bookmarks                         & N/A\\
+    playlist catalog directory & /path/to/dir & N/A\\
+    \nopt{wheel_acceleration}{
+      list\_accel\_start\_delay & 0 to 10  & ms\\
+      list\_accel\_wait        & 1 to 10  & s\\
+    }
+%
+      replaygain type
+                    & track, album, track shuffle, off
+                                        & N/A\\
+      replaygain noclip
+                    & on, off           & N/A\\
+      replaygain preamp
+                    & $-120$ to 120     & 0.1~dB\\
+%
+      \opt{crossfade}{
+      crossfade     & off, auto track change, man track skip, shuffle,
+                    shuffle or man track skip, always
+                                        & N/A\\
+      crossfade fade in delay
+                    & 0 to 7            & s\\
+      crossfade fade out delay
+                    & 0 to 7            & s\\
+      crossfade fade in duration
+                    & 0 to 15           & s\\
+      crossfade fade out duration
+                    & 0 to 15           & s\\
+      crossfade fade out mode
+                    & crossfade, mix    & N/A\\
+      }
+%
+      crossfeed     & on, off           & N/A\\
+      crossfeed direct gain
+                    & 0 to 60           & 0.1~dB\\
+      crossfeed cross gain
+                    & 30 to 120         & 0.1~dB\\
+      crossfeed hf attenuation
+                    & 60 to 240         & 0.1~dB\\
+      crossfeed hf cutoff
+                    & 500 to 2000       & Hz\\
+%
+      eq enabled    & on, off           & N/A\\
+      eq precut     & 0 to 240          & 0.1~dB\\
+      eq low shelf filter & cutoff (in Hz), q (0 to 64), gain ($-240$ to 240)\\
+      eq peak filter 1 & cutoff (in Hz), q (0 to 64), gain ($-240$ to 240)\\
+      eq peak filter 2 & cutoff (in Hz), q (0 to 64), gain ($-240$ to 240)\\
+      eq peak filter 3 & cutoff (in Hz), q (0 to 64), gain ($-240$ to 240)\\
+      eq peak filter 4 & cutoff (in Hz), q (0 to 64), gain ($-240$ to 240)\\
+      eq peak filter 5 & cutoff (in Hz), q (0 to 64), gain ($-240$ to 240)\\
+      eq peak filter 6 & cutoff (in Hz), q (0 to 64), gain ($-240$ to 240)\\
+      eq peak filter 7 & cutoff (in Hz), q (0 to 64), gain ($-240$ to 240)\\
+      eq peak filter 8 & cutoff (in Hz), q (0 to 64), gain ($-240$ to 240)\\
+      eq high shelf filter & cutoff (in Hz), q (0 to 64), gain ($-240$ to 240 (0.1~dB))\\
+%
+      dithering enabled & on, off       & N/A\\
+%
+      timestretch enabled & on, off     & N/A\\
+%
+      compressor threshold      & 0 to $-24$    & $-3$~dB\\
+      compressor makeup gain    & off, auto     & N/A\\
+      compressor ratio          & 2:1, 4:1, 6:1, 10:1, limit
+                                                & N/A\\
+      compressor knee           & hard knee, soft knee
+                                                & N/A\\
+      compressor release time   & 100 to 1000   & 100~ms\\
+%
+      beep          & off, weak, moderate, strong & N/A\\
+      keyclick      & off, weak, moderate, strong & N/A\\
+      keyclick repeats & on, off        & N/A\\
+      dircache      & on, off           & N/A\\
+      tagcache\_ram & on, off           & N/A\\
+      database path & path to a directory & N/A\\
+      database scan paths & one or more paths, each separated by a colon  & N/A\\
+
+    \opt{touchpad}{
+      \opt{GIGABEAT_PAD}{
+        touchpad sensitivity  & normal, high & N/A\\
+      }
+      \opt{SANSA_FUZEPLUS_PAD}{
+        touchpad sensitivity  & $-25$ to 25 & N/A\\
+        touchpad deadzone     & 0 to 100 & N/A\\
+      }
+    }%
+
+      peak meter release
+                    & 1 to 126          & ?\\
+       peak meter hold
+                    & off, 200ms, 300ms, 500ms, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+                      15, 20, 30, 1min  & N/A \\
+       peak meter clip hold
+                    & on, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 45,
+                      60, 90, 2min, 3min, 5min, 10min, 20min, 45min, 90min
+                                        & N/A \\
+      peak meter busy & on, off         & N/A\\
+      peak meter dbfs & on, off         & on:~dbfs, off:~linear\\
+      peak meter min  & 0 to 89 (dB) or 0 to 100 (\%)
+                                        & dB or \%\\
+      peak meter max  & 0 to 89 (dB) or 0 to 100 (\%)
+                                        & dB or \%\\
+      statusbar     & off, top, bottom  & N/A\\
+      \opt{remote}{
+        remote statusbar & off, top, bottom & N/A\\
+      }
+      scrollbar     & off, left, right  & N/A\\
+      scrollbar width & 3 to LCD width / 10 (\fixme{devise a way
+                    to get ranges from config-*.h})& pixels\\
+      volume display
+                    & graphic, numeric  & N/A\\
+      battery display
+                    & graphic, numeric  & N/A\\
+      font          & /path/filename.fnt & N/A\\
+      kbd           & /path/filename.kbd & N/A\\
+      \opt{lcd_invert}{
+        invert        & on, off           & N/A\\
+      }
+      \opt{lcd_flip}{
+        flip display  & on, off           & N/A\\
+      }
+      selector type   & pointer, bar (inverse)
+        \opt{lcd_color}{, bar (color), bar (gradient)} & N/A\\
+      show icons    & on, off           & N/A\\
+      iconset       & /path/filename.bmp & N/A\\
+      viewers iconset & /path/filename.bmp & N/A\\
+
+      backdrop      & /path/filename.bmp    & N/A\\
+
+    \opt{lcd_color}{
+      foreground colour & 000000 to FFFFFF   & RRGGBB\\
+      background colour & 000000 to FFFFFF   & RRGGBB\\
+      line selector start colour & 000000 to FFFFFF  & RRGGBB\\
+      line selector end colour   & 000000 to FFFFFF  & RRGGBB\\
+      line selector text colour  & 000000 to FFFFFF  & RRGGBB\\
+      filetype colours & /path/filename.colours & N/A\\
+    }
+
+    \opt{HAVE_REMOTE_LCD}{
+      rwps      & /path/filename.rwps   & N/A\\
+      remote contrast
+                & 5 to 63               & N/A\\
+      remote invert
+                & on, off               & N/A\\
+      remote flip display
+                & on, off               & N/A\\
+      remote backlight timeout
+                & off, on, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25,
+                  30, 45, 60, 90        & s\\
+      remote backlight timeout plugged
+                & off, on, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25,
+                  30, 45, 60, 90        & s\\
+      remote caption backlight
+                & on, off               & N/A\\
+      remote scroll speed
+                & 0 to 15               & N/A\\
+      remote scroll step
+                & 1 to 160              & N/A\\
+      remote scroll delay
+                & 0 to 2500             & ms\\
+      remote bidir limit
+                & 0 to 200              & N/A\\
+      backlight filters first remote keypress
+                & on, off               & N/A\\
+      remote iconset & /path/filename.bmp & N/A\\
+      remote viewers iconset & /path/filename.bmp & N/A\\
+      \opt{iriverh100,iriverh300}{
+        remote reduce ticking
+                & on, off               & N/A\\
+      }%
+    }
+    \opt{rtc}{
+      time format & 12hour, 24hour      & N/A\\
+    }%
+    \opt{recording}{
+     rec quality & 0 to 7               & 0: small size, 7: high quality\\
+     rec frequency
+                & 48, 44, 32, 24, 22, 16 & kHz\\
+     rec source & mic, line, spdif      & N/A\\
+     rec channels & mono, stereo        & N/A\\
+     rec mic gain & 0 to 15             & N/A\\
+     rec left gain & 0 to 15            & N/A\\
+     rec right gain
+                & 0 to 15               & N/A\\
+     editable recordings
+                & off,on                & N/A\\
+     rec timesplit
+                & off, 0:05, 0:10, 0:15, 0:30, 1:00, 2:00, 4:00, 6:00,
+                  8:00, 16:00, 24:00    & h:mm\\
+     pre-recording time
+                & off, 1 to 30          & s\\
+     rec path & /path/to/dir            & N/A\\
+    }%
+    \opt{spdif_power}{
+      spdif enable & off, on            & N/A\\
+    }%
+    \opt{radio}{
+      force fm mono
+                & off, on               & N/A\\
+    }%
+    \opt{rds}{
+      sync RDS time
+                & off, on               & N/A\\
+    }%
+    \opt{clear_settings_on_hold}{
+      clear settings on hold
+                & off, on               & N/A\\
+    }%
+    \bottomrule
+  \end{longtable}
+\end{center}

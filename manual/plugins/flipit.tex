@@ -1,0 +1,97 @@
+\subsection{Flipit}
+\screenshot{plugins/images/ss-flipit}{Flipit}{img:flipit}
+Flipping the colour of the token under the cursor also flips the tokens
+above, below, left and right of the cursor.  The aim is to end up with
+a screen containing tokens of only one colour.
+
+\begin{btnmap}
+\opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IAUDIO_X5_PAD%
+    ,SANSA_E200_PAD,SANSA_FUZE_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD%
+    ,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD%
+    ,RG_NANO_PAD}
+    {\ButtonUp{} / \ButtonDown{} / \ButtonLeft{} / \ButtonRight}
+\opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonMenu{} / \ButtonPlay{} / \ButtonLeft{} / \ButtonRight}
+\opt{IRIVER_H10_PAD}{\ButtonScrollUp{} / \ButtonScrollDown{} / \ButtonLeft{} / \ButtonRight}
+\opt{MPIO_HD300_PAD}{\ButtonScrollUp / \ButtonScrollDown / \ButtonRew / \ButtonFF}
+       \opt{HAVEREMOTEKEYMAP}{& }
+\opt{COWON_D2_PAD}{\TouchTopMiddle{} / \TouchBottomMiddle{} / \TouchMidLeft{} / \TouchMidRight}
+\opt{XDUOO_X3_PAD}{\ButtonPrev{} / \ButtonNext{} / \ButtonHome{} / \ButtonOption}
+    & Move the cursor \\
+\opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonPlay}
+\opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IPOD_4G_PAD,IPOD_3G_PAD,IAUDIO_X5_PAD%
+    ,SANSA_E200_PAD,SANSA_FUZE_PAD,SANSA_C200_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD%
+    ,MROBE100_PAD,SANSA_FUZEPLUS_PAD}
+    {\ButtonSelect}
+\opt{IRIVER_H10_PAD}{\ButtonRew}
+\opt{COWON_D2_PAD}{\TouchCenter}
+\opt{PBELL_VIBE500_PAD}{\ButtonOK}
+\opt{MPIO_HD300_PAD}{\ButtonEnter}
+\opt{SANSA_CLIP_PAD}{\ButtonHome}
+\opt{XDUOO_X3_PAD}{\ButtonPlay}
+       \opt{HAVEREMOTEKEYMAP}{& }
+\opt{RG_NANO_PAD}{\ButtonA}
+    & Flip \\
+\opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonMode}
+\opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonSelect+\ButtonLeft}
+\opt{IAUDIO_X5_PAD,IRIVER_H10_PAD}{\ButtonPlay+\ButtonLeft}
+\opt{SANSA_E200_PAD,SANSA_C200_PAD}{\ButtonRec+\ButtonLeft}
+\opt{SANSA_CLIP_PAD}{\ButtonHome+\ButtonLeft}
+\opt{SANSA_FUZE_PAD}{\ButtonSelect+\ButtonLeft}
+\opt{GIGABEAT_PAD,GIGABEAT_S_PAD,MROBE100_PAD}{\ButtonMenu}
+\opt{COWON_D2_PAD}{\TouchTopRight}
+\opt{PBELL_VIBE500_PAD,MPIO_HD300_PAD,SANSA_FUZEPLUS_PAD}{\ButtonPlay}
+\opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRew}
+\opt{XDUOO_X3_PAD}{\ButtonHome{} + \ButtonPrev{}}
+       \opt{HAVEREMOTEKEYMAP}{& }
+\opt{RG_NANO_PAD}{\ButtonB}
+    & Shuffle \\
+\opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOn}
+\opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonSelect+\ButtonPlay}
+\opt{IAUDIO_X5_PAD,IRIVER_H10_PAD}{\ButtonPlay+\ButtonRight}
+\opt{SANSA_E200_PAD,SANSA_C200_PAD}{\ButtonRec+\ButtonRight}
+\opt{SANSA_CLIP_PAD}{\ButtonHome+\ButtonRight}
+\opt{SANSA_FUZE_PAD}{\ButtonSelect+\ButtonDown}
+\opt{GIGABEAT_PAD,GIGABEAT_S_PAD}{\ButtonVolUp}
+\opt{MROBE100_PAD}{\ButtonPlay}
+\opt{COWON_D2_PAD}{\TouchBottomLeft}
+\opt{PBELL_VIBE500_PAD,MPIO_HD300_PAD}{\ButtonMenu}
+\opt{SANSA_FUZEPLUS_PAD}{\ButtonBack}
+\opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{Long \ButtonFF}
+\opt{XDUOO_X3_PAD}{\ButtonHome{} + \ButtonNext{}}
+       \opt{HAVEREMOTEKEYMAP}{& }
+\opt{RG_NANO_PAD}{\ButtonX}
+    & Solve \\
+\opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonRec}
+\opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonSelect+\ButtonRight}
+\opt{IAUDIO_X5_PAD}{\ButtonPlay+\ButtonUp}
+\opt{IRIVER_H10_PAD}{\ButtonPlay+\ButtonScrollUp}
+\opt{SANSA_E200_PAD,SANSA_C200_PAD}{\ButtonRec+\ButtonSelect}
+\opt{SANSA_CLIP_PAD}{\ButtonHome+\ButtonSelect}
+\opt{SANSA_FUZE_PAD}{\ButtonSelect+\ButtonRight}
+\opt{GIGABEAT_PAD,GIGABEAT_S_PAD}{\ButtonVolDown}
+\opt{MROBE100_PAD}{\ButtonDisplay}
+\opt{COWON_D2_PAD}{\TouchBottomRight}
+\opt{PBELL_VIBE500_PAD}{\ButtonCancel}
+\opt{MPIO_HD300_PAD}{\ButtonRec}
+\opt{SANSA_FUZEPLUS_PAD}{\ButtonBottomLeft}
+\opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonFF}
+\opt{XDUOO_X3_PAD}{\ButtonHome{} + \ButtonPlay{}}
+       \opt{HAVEREMOTEKEYMAP}{& }
+\opt{RG_NANO_PAD}{\ButtonY}
+    & Solve step by step \\
+\opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOff}
+\opt{IPOD_4G_PAD,IPOD_3G_PAD}{Long \ButtonSelect}
+\opt{IAUDIO_X5_PAD,IRIVER_H10_PAD,SANSA_E200_PAD,GIGABEAT_PAD,MROBE100_PAD%
+    ,SANSA_C200_PAD,SANSA_CLIP_PAD,COWON_D2_PAD,SANSA_FUZEPLUS_PAD}{\ButtonPower}
+\opt{SANSA_FUZE_PAD}{Long \ButtonHome}
+\opt{GIGABEAT_S_PAD}{\ButtonBack}
+\opt{PBELL_VIBE500_PAD}{\ButtonRec}
+\opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{Long \ButtonRew}
+\opt{MPIO_HD300_PAD}{Long \ButtonMenu}
+\opt{XDUOO_X3_PAD}{\ButtonPower}
+       \opt{HAVEREMOTEKEYMAP}{& 
+          \opt{IRIVER_RC_H100_PAD}{\ButtonRCStop}
+        }
+\opt{RG_NANO_PAD}{\ButtonStart}
+    & Quit the game \\
+\end{btnmap}

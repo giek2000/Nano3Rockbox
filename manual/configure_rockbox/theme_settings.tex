@@ -1,0 +1,149 @@
+The \setting{Theme Settings} menu offers options that you can change to
+customize the visual appearance of Rockbox.
+
+\begin{description}
+\item[Browse Theme Files.]
+  This option will display all the currently installed themes on the \dap{}, 
+  press \ActionTreeEnter{} to load the chosen theme and apply it.
+
+  A theme is a configuration file, stored in a specific directory, 
+  that typically changes the WPS 
+  \opt{HAVE_REMOTE_LCD}{and remote WPS}, font used and on some platforms
+  additional information such as background image and text colours.
+
+  There are a number of themes that ship with Rockbox. If none of
+  these suit your needs, many more can be downloaded from 
+  \opt{iaudiom5}{\url{https://themes.rockbox.org/index.php?target=m5}}%
+  \opt{iaudiox5}{\url{https://themes.rockbox.org/index.php?target=x5}}%
+  \opt{iaudiom3}{\url{https://themes.rockbox.org/index.php?target=m3}}%
+  \opt{iriverh100}{\url{https://themes.rockbox.org/index.php?target=h100}}%
+  \opt{iriverh300}{\url{https://themes.rockbox.org/index.php?target=h300}}%
+  \opt{iriverh10_5gb}{\url{https://themes.rockbox.org/index.php?target=h10_5gb}}%
+  \opt{iriverh10}{\url{https://themes.rockbox.org/index.php?target=h10}}%
+  \opt{ipod1g2g}{\url{https://themes.rockbox.org/index.php?target=ipod1g2g}}%
+  \opt{ipod3g}{\url{https://themes.rockbox.org/index.php?target=ipod3g}}%
+  \opt{ipod4g}{\url{https://themes.rockbox.org/index.php?target=ipod4g}}%
+  \opt{ipodcolor}{\url{https://themes.rockbox.org/index.php?target=ipodcolor}}%
+  \opt{ipodvideo}{\url{https://themes.rockbox.org/index.php?target=ipodvideo}}%
+  \opt{ipodmini}{\url{https://themes.rockbox.org/index.php?target=ipodmini}}%
+  \opt{ipodnano}{\url{https://themes.rockbox.org/index.php?target=ipodnano}}%
+  \opt{ipodnano2g}{\url{https://themes.rockbox.org/index.php?target=ipodnano2g}}%
+  \opt{e200}{\url{https://themes.rockbox.org/index.php?target=e200}}%
+  \opt{e200v2}{\url{https://themes.rockbox.org/index.php?target=e200v2}}%
+  \opt{c200}{\url{https://themes.rockbox.org/index.php?target=c200}}%
+  \opt{gigabeatf}{\url{https://themes.rockbox.org/index.php?target=gigabeatf}}%
+  \opt{gigabeats}{\url{https://themes.rockbox.org/index.php?target=gigabeats}}%
+  \opt{mrobe100}{\url{https://themes.rockbox.org/index.php?target=mrobe100}}%
+  \opt{vibe500}{\url{https://themes.rockbox.org/index.php?target=vibe500}}%
+  \opt{fuzeplus}{\url{https://themes.rockbox.org/index.php?target=sansafuzeplus}}%
+  \opt{samsungyh820}{\url{https://themes.rockbox.org/index.php?target=samsungyh820}}%
+  \opt{samsungyh920}{\url{https://themes.rockbox.org/index.php?target=samsungyh920}}%
+  \opt{samsungyh925}{\url{https://themes.rockbox.org/index.php?target=samsungyh925}}%
+  \opt{xduoox3}{\url{https://themes.rockbox.org/index.php?target=xduoox3}}%
+  .
+
+  \note{Themes do not have to be purely visual. It is quite possible to create
+    a theme that switches between audio configurations for use in the car, with
+    headphones and when connected to an external amplifier. See
+    \reference{ref:CreateYourOwnWPS} for more details.}
+
+  \item[Font.]
+    Browse the installed fonts on your \dap{}. Selecting one will activate it.
+    See \reference{ref:Loadingfonts} for further details about fonts.
+
+\item[While Playing Screen.]
+  Opens the \setting{File Browser} in the \fname{/.rockbox/wps} directory and
+  displays all \fname{.wps} files. Selecting one will activate it,
+  \ActionStdCancel{} will exit back to the menu. For further information
+  about the WPS see \reference{ref:WPS}. For information about editing
+  a .wps file see \reference{ref:ConfiguringtheWPS}.
+
+\opt{HAVE_REMOTE_LCD}{
+  \item[Remote While Playing Screen.]
+    Opens the \setting{File Browser} in the \fname{/.rockbox/wps} directory and
+    displays all \fname{.rwps} files. Selecting one will activate it, stop will
+    exit back to the menu.
+    \note{
+      A \fname{.rwps} file is a special \fname{.wps} file for the remote
+      display.
+    }
+}
+
+\item[Show Icons.]
+  Rockbox has the ability to display an icon to the left of the file
+  in the \setting{File Browser}. For details of these icons, see
+  \reference{ref:Supportedfileformats}.
+  These icons can also be customised. See the \wikilink{IconSets}
+  and \wikilink{CustomIcons} Wiki pages for details.
+
+\opt{lcd_non-mono}{%
+  \item[Clear Backdrop.]
+    Rockbox allows you to select bitmap pictures to use as backdrops,
+    see \reference{ref:LoadingBackdrops} for further information.
+    This option allows you to clear the backdrops that you set.
+}
+%
+\item[Status/Scrollbar.]
+  Settings related to on screen status display and the scrollbar.
+  \begin{description}
+  \item[Scroll Bar.] Allows you to choose where the vertical scroll bar
+    should appear.
+  \item[Scroll Bar Width.] Allows you to choose the width of the
+    scroll bar (in pixels).  Default value is 6.
+  \item[Status Bar.] Allows you to choose where to display the 
+    statusbar\opt{remote}{ on the main display}. 
+  \opt{remote}{
+    \item[Remote Status Bar.] Allows you to choose where to display the 
+    statusbar on the remote display.
+  }
+  \item[Volume Display.] Controls whether the volume is displayed as a
+    graphic or a numeric value on the Status Bar. If you select a numeric
+    display, volume is displayed in decibels.  See \reference{ref:volume}
+    for more on the volume setting.
+  \item[Battery Display.] Controls whether the battery charge status is
+    displayed as a graphic or numerical percentage value on the Status Bar.
+  \end{description}
+%
+\item[Line Selector Type.]
+  This option allows you to select which type of line selector to use.
+  \begin{description}
+    \item[Pointer.]
+      A small arrow to the left of the menu text.
+    \item[Bar (inverse).]
+      A bar with inverted foreground and background colour.
+\opt{lcd_color}{
+    \item[Bar (Solid Colour).]
+      A bar with a solid colour, the colour is set in the \setting{Colours}
+      submenu.
+    \item[Bar (Gradient Colour).]
+      A bar with a colour gradient, the colours are set in the \setting{Colours}
+      submenu.
+}
+  \end{description}
+
+\opt{lcd_color}{
+  \item[Colours.]
+    The options in this menu sets the colours for visual elements in Rockbox.
+    \begin{description}
+    \item[Line Selector Colours.]
+      These options sets the colours for the line selector bars.
+      \begin{description}
+        \item[Primary Colour.]
+          Set the primary colour used for the gradient line selector bar and the
+          colour used for the solid color line selector bar.
+        \item[Secondary Colour.]
+          Set the secondary colour used for the gradient line selector bar.
+        \item[Text Colour.]
+          Set the colour of the selected text when using the solid colour or the
+          gradient colour line selection bars.
+      \end{description}
+
+    \item[Background Colour.]
+      Sets the background colour for the display.
+    \item[Foreground Colour.]
+      Sets the colour used for text and icons.
+    \item[Reset Colours.]
+      Resets the LCD display to Rockbox's default colours.
+    \end{description}
+}% lcd_color
+\end{description}

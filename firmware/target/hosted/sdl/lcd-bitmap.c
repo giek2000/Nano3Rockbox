@@ -1,0 +1,250 @@
+/***************************************************************************
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
+ *
+ * Copyright (C) 2006 Dan Everton
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+ * KIND, either express or implied.
+ *
+ ****************************************************************************/
+
+#include "debug.h"
+#include "sim-ui-defines.h"
+#include "system.h"
+#include "button-sdl.h"
+#include "lcd-sdl.h"
+#include "screendump.h"
+
+SDL_Surface* lcd_surface;
+
+#if LCD_DEPTH <= 8
+#ifdef HAVE_BACKLIGHT
+SDL_Color lcd_bl_color_dark    = {RED_CMP(LCD_BL_DARKCOLOR),
+                                  GREEN_CMP(LCD_BL_DARKCOLOR),
+                                  BLUE_CMP(LCD_BL_DARKCOLOR), 0};
+SDL_Color lcd_bl_color_bright  = {RED_CMP(LCD_BL_BRIGHTCOLOR),
+                                  GREEN_CMP(LCD_BL_BRIGHTCOLOR),
+                                  BLUE_CMP(LCD_BL_BRIGHTCOLOR), 0};
+#ifdef HAVE_LCD_SPLIT
+SDL_Color lcd_bl_color2_dark   = {RED_CMP(LCD_BL_DARKCOLOR_2),
+                                  GREEN_CMP(LCD_BL_DARKCOLOR_2),
+                                  BLUE_CMP(LCD_BL_DARKCOLOR_2), 0};
+SDL_Color lcd_bl_color2_bright = {RED_CMP(LCD_BL_BRIGHTCOLOR_2),
+                                  GREEN_CMP(LCD_BL_BRIGHTCOLOR_2),
+                                  BLUE_CMP(LCD_BL_BRIGHTCOLOR_2), 0};
+#endif
+#endif /* HAVE_BACKLIGHT */
+SDL_Color lcd_color_dark    = {RED_CMP(LCD_DARKCOLOR),
+                               GREEN_CMP(LCD_DARKCOLOR),
+                               BLUE_CMP(LCD_DARKCOLOR), 0};
+SDL_Color lcd_color_bright  = {RED_CMP(LCD_BRIGHTCOLOR),
+                               GREEN_CMP(LCD_BRIGHTCOLOR),
+                               BLUE_CMP(LCD_BRIGHTCOLOR), 0};
+#ifdef HAVE_LCD_SPLIT
+SDL_Color lcd_color2_dark   = {RED_CMP(LCD_DARKCOLOR_2),
+                               GREEN_CMP(LCD_DARKCOLOR_2),
+                               BLUE_CMP(LCD_DARKCOLOR_2), 0};
+SDL_Color lcd_color2_bright = {RED_CMP(LCD_BRIGHTCOLOR_2),
+                               GREEN_CMP(LCD_BRIGHTCOLOR_2),
+                               BLUE_CMP(LCD_BRIGHTCOLOR_2), 0};
+#endif
+
+#ifdef HAVE_LCD_SPLIT
+#define NUM_SHADES    128
+#else
+#define NUM_SHADES    129
+#endif
+
+#else /* LCD_DEPTH > 8 */
+
+#ifdef HAVE_TRANSFLECTIVE_LCD
+#define BACKLIGHT_OFF_ALPHA 85 /* 1/3 brightness */
+#else
+#define BACKLIGHT_OFF_ALPHA 0  /* pitch black */
+#endif
+
+#endif /* LCD_DEPTH */
+
+#if LCD_DEPTH < 8
+unsigned long (*lcd_ex_getpixel)(int, int) = NULL;
+#endif /* LCD_DEPTH < 8 */
+
+#if LCD_DEPTH == 2
+/* Only defined for positive, non-split LCD for now */
+static const unsigned char colorindex[4] = {128, 85, 43, 0};
+#endif
+
+static unsigned long get_lcd_pixel(int x, int y)
+{
+#if LCD_DEPTH == 1
+#ifdef HAVE_NEGATIVE_LCD
+    return (*FBADDR(x, y/8) & (1 << (y & 7))) ? (NUM_SHADES-1) : 0;
+#else
+    return (*FBADDR(x, y/8) & (1 << (y & 7))) ? 0 : (NUM_SHADES-1);
+#endif
+#elif LCD_DEPTH == 2
+#if LCD_PIXELFORMAT == HORIZONTAL_PACKING
+    return colorindex[(*FBADDR(x/4, y) >> (2 * (~x & 3))) & 3];
+#elif LCD_PIXELFORMAT == VERTICAL_PACKING
+    return colorindex[(*FBADDR(x, y/4) >> (2 * (y & 3))) & 3];
+#elif LCD_PIXELFORMAT == VERTICAL_INTERLEAVED
+    unsigned bits = (*FBADDR(x, y/8) >> (y & 7)) & 0x0101;
+    return colorindex[(bits | (bits >> 7)) & 3];
+#endif
+#elif LCD_DEPTH == 16
+#if LCD_PIXELFORMAT == RGB565SWAPPED
+    unsigned bits = *FBADDR(x, y);
+    return (bits >> 8) | (bits << 8);
+#else
+    return *FBADDR(x, y);
+#endif
+#elif LCD_DEPTH >= 24
+    return FB_UNPACK_SCALAR_LCD(*FBADDR(x, y));
+#endif
+}
+
+#ifdef HAVE_LCD_FLIP
+/* The simulator has no real LCD controller, so flip_display is done in software
+   here: when set, the framebuffer is mirrored as it is copied to the surface.
+   (On the device the controller flips itself; see lcd-clipzip.c.) */
+static bool sim_lcd_flipped = false;
+void lcd_set_flip(bool yesno)
+{
+    sim_lcd_flipped = yesno;
+}
+#endif
+
+void lcd_update(void)
+{
+    /* update a full screen rect */
+    lcd_update_rect(0, 0, LCD_WIDTH, LCD_HEIGHT);
+}
+
+void lcd_update_rect(int x_start, int y_start, int width, int height)
+{
+#ifdef HAVE_LCD_FLIP
+    if (sim_lcd_flipped)
+    {
+        /* redraw the whole panel mirrored in both axes (sim software flip) */
+        SDL_Rect d = {0, 0, 1, 1};
+        int x, y;
+        for (y = 0; y < LCD_HEIGHT; y++)
+        {
+            for (x = 0; x < LCD_WIDTH; x++)
+            {
+                d.x = x;
+                d.y = y;
+                SDL_FillRect(lcd_surface, &d, (Uint32)
+                    get_lcd_pixel(LCD_WIDTH - 1 - x, LCD_HEIGHT - 1 - y));
+            }
+        }
+        sdl_gui_update(lcd_surface, 0, 0, LCD_WIDTH,
+                       LCD_HEIGHT + LCD_SPLIT_LINES, SIM_LCD_WIDTH, SIM_LCD_HEIGHT,
+                       background ? UI_LCD_POSX : 0, background? UI_LCD_POSY : 0);
+        return;
+    }
+#endif
+
+    sdl_update_rect(lcd_surface, x_start, y_start, width, height,
+                    LCD_WIDTH, LCD_HEIGHT, get_lcd_pixel);
+    sdl_gui_update(lcd_surface, x_start, y_start, width,
+                   height + LCD_SPLIT_LINES, SIM_LCD_WIDTH, SIM_LCD_HEIGHT,
+                   background ? UI_LCD_POSX : 0, background? UI_LCD_POSY : 0);
+}
+
+#if defined(HAVE_BACKLIGHT) && (SDL_MAJOR_VERSION > 1)
+void sim_backlight(int value)
+{
+#if LCD_DEPTH <= 8
+    if (value > 0) {
+        sdl_set_gradient(lcd_surface, &lcd_bl_color_dark,
+                         &lcd_bl_color_bright, 0, NUM_SHADES);
+#ifdef HAVE_LCD_SPLIT
+        sdl_set_gradient(lcd_surface, &lcd_bl_color2_dark,
+                         &lcd_bl_color2_bright, NUM_SHADES, NUM_SHADES);
+#endif
+    } else {
+        sdl_set_gradient(lcd_surface, &lcd_color_dark,
+                         &lcd_color_bright, 0, NUM_SHADES);
+#ifdef HAVE_LCD_SPLIT
+        sdl_set_gradient(lcd_surface, &lcd_color2_dark,
+                         &lcd_color2_bright, NUM_SHADES, NUM_SHADES);
+#endif
+    }
+#else /* LCD_DEPTH > 8 */
+#if defined(HAVE_TRANSFLECTIVE_LCD) && defined(HAVE_LCD_SLEEP)
+    if (!lcd_active())
+        SDL_SetSurfaceAlphaMod(lcd_surface, 0);
+    else
+        SDL_SetSurfaceAlphaMod(lcd_surface,
+                        MAX(BACKLIGHT_OFF_ALPHA, (value * 255) / 100));
+#else
+    SDL_SetSurfaceAlphaMod(lcd_surface, (value * 255) / 100);
+#endif
+#endif /* LCD_DEPTH */
+
+    sdl_gui_update(lcd_surface, 0, 0, SIM_LCD_WIDTH, SIM_LCD_HEIGHT,
+                   SIM_LCD_WIDTH, SIM_LCD_HEIGHT,
+                   background ? UI_LCD_POSX : 0, background? UI_LCD_POSY : 0);
+}
+#endif /* HAVE_BACKLIGHT */
+
+/* initialise simulator lcd driver */
+void lcd_init_device(void)
+{
+#if LCD_DEPTH >= 16
+    lcd_surface = SDL_CreateRGBSurface(SDL_SWSURFACE, SIM_LCD_WIDTH, SIM_LCD_HEIGHT,
+                                       LCD_DEPTH, 0, 0, 0, 0);
+#if SDL_MAJOR_VERSION > 1
+    SDL_SetSurfaceBlendMode(lcd_surface, SDL_BLENDMODE_BLEND);
+#endif
+#elif LCD_DEPTH <= 8
+    lcd_surface = SDL_CreateRGBSurface(SDL_SWSURFACE, SIM_LCD_WIDTH, SIM_LCD_HEIGHT,
+                                       8, 0, 0, 0, 0);
+
+#ifdef HAVE_BACKLIGHT
+    sdl_set_gradient(lcd_surface, &lcd_bl_color_dark,
+                     &lcd_bl_color_bright, 0, NUM_SHADES);
+#ifdef HAVE_LCD_SPLIT
+    sdl_set_gradient(lcd_surface, &lcd_bl_color2_dark,
+                     &lcd_bl_color2_bright, NUM_SHADES, NUM_SHADES);
+#endif
+#else /* !HAVE_BACKLIGHT */
+    sdl_set_gradient(lcd_surface, &lcd_color_dark,
+                     &lcd_color_bright, 0, NUM_SHADES);
+#ifdef HAVE_LCD_SPLIT
+    sdl_set_gradient(lcd_surface, &lcd_color2_dark,
+                     &lcd_color2_bright, NUM_SHADES, NUM_SHADES);
+#endif
+#endif /* !HAVE_BACKLIGHT */
+#endif /* LCD_DEPTH */
+}
+
+#if LCD_DEPTH < 8
+void sim_lcd_ex_init(unsigned long (*getpixel)(int, int))
+{
+    lcd_ex_getpixel = getpixel;
+}
+
+void sim_lcd_ex_update_rect(int x_start, int y_start, int width, int height)
+{
+    if (lcd_ex_getpixel) {
+        sdl_update_rect(lcd_surface, x_start, y_start, width, height,
+                        LCD_WIDTH, LCD_HEIGHT, lcd_ex_getpixel);
+        sdl_gui_update(lcd_surface, x_start, y_start, width,
+                       height + LCD_SPLIT_LINES, SIM_LCD_WIDTH, SIM_LCD_HEIGHT,
+                       background ? UI_LCD_POSX : 0,
+                       background ? UI_LCD_POSY : 0);
+    }
+}
+#endif

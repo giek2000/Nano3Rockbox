@@ -1,0 +1,174 @@
+/***************************************************************************
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
+ *
+ * Copyright (C) 2002 Itai Shaked
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+ * KIND, either express or implied.
+ *
+ **************************************************************************/
+#include "plugin.h"
+#include "lib/mylcd.h"
+#include "lib/pluginlib_actions.h"
+
+#define NUM_PARTICLES (LCD_WIDTH * LCD_HEIGHT / 72)
+#define SNOW_HEIGHT LCD_HEIGHT
+#define SNOW_WIDTH LCD_WIDTH
+
+static const struct button_mapping *plugin_contexts[] = { pla_main_ctx };
+
+/* PLA definitions */
+#define SNOW_QUIT    PLA_EXIT
+
+#if (CONFIG_KEYPAD == IPOD_1G2G_PAD) \
+    || (CONFIG_KEYPAD == IPOD_3G_PAD) \
+    || (CONFIG_KEYPAD == IPOD_4G_PAD)
+#define SNOW_QUIT2   PLA_UP
+#else
+#define SNOW_QUIT2   PLA_CANCEL
+#endif
+static short particles[NUM_PARTICLES][2];
+
+#if LCD_WIDTH >= 160
+#define FLAKE_WIDTH 5
+static const unsigned char flake[] = {0x0a,0x04,0x1f,0x04,0x0a};
+#else
+#define FLAKE_WIDTH 3
+static const unsigned char flake[] = {0x02,0x07,0x02};
+#endif
+
+static bool particle_exists(int particle)
+{
+    if (particles[particle][0]>=0 && particles[particle][1]>=0 &&
+        particles[particle][0]<SNOW_WIDTH && particles[particle][1]<SNOW_HEIGHT)
+        return true;
+    else
+        return false;
+}
+
+static int create_particle(void)
+{
+    int i;
+
+    for (i=0; i<NUM_PARTICLES; i++) {
+        if (!particle_exists(i)) {
+            particles[i][0]=(rb->rand()%SNOW_WIDTH);
+            particles[i][1]=0;
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void snow_move(void)
+{
+    int i;
+
+    if (!(rb->rand()%2))
+        create_particle();
+
+    for (i=0; i<NUM_PARTICLES; i++) {
+        if (particle_exists(i)) {
+            mylcd_set_drawmode(DRMODE_SOLID|DRMODE_INVERSEVID);
+            rb->lcd_fillrect(particles[i][0],particles[i][1],
+                             FLAKE_WIDTH,FLAKE_WIDTH);
+            mylcd_set_drawmode(DRMODE_SOLID);
+#ifdef HAVE_REMOTE_LCD
+            if (particles[i][0] <= LCD_REMOTE_WIDTH 
+                    && particles[i][1] <= LCD_REMOTE_HEIGHT) {
+                rb->lcd_remote_set_drawmode(DRMODE_SOLID|DRMODE_INVERSEVID);
+                rb->lcd_remote_fillrect(particles[i][0],particles[i][1],
+                                        FLAKE_WIDTH,FLAKE_WIDTH);
+                rb->lcd_remote_set_drawmode(DRMODE_SOLID);
+            }
+#endif
+            switch ((rb->rand()%7)) {
+                case 0:
+                    particles[i][0]++;
+                    break;
+
+                case 1:
+                    particles[i][0]--;
+                    break;
+
+                case 2:
+                    break;
+
+                default:
+                    particles[i][1]++;
+                    break;
+            }
+            if (particle_exists(i))
+                rb->lcd_mono_bitmap(flake,particles[i][0],particles[i][1],
+                                    FLAKE_WIDTH,FLAKE_WIDTH);
+#ifdef HAVE_REMOTE_LCD
+            if (particles[i][0] <= LCD_REMOTE_WIDTH 
+                    && particles[i][1] <= LCD_REMOTE_HEIGHT) {
+                rb->lcd_remote_mono_bitmap(flake,particles[i][0],particles[i][1],
+                                           FLAKE_WIDTH,FLAKE_WIDTH);
+            }
+#endif
+        }
+    }
+}
+
+
+static void snow_init(void)
+{
+    int i;
+
+    for (i=0; i<NUM_PARTICLES; i++) {
+        particles[i][0]=-1;
+        particles[i][1]=-1;
+    }        
+    mylcd_clear_display();
+#ifdef HAVE_REMOTE_LCD
+    rb->lcd_remote_clear_display();
+#endif
+}
+
+enum plugin_status plugin_start(const void* parameter)
+{
+    int button;
+    (void)(parameter);
+
+#ifdef HAVE_LCD_COLOR
+    rb->lcd_clear_display();
+    rb->lcd_set_foreground(LCD_WHITE);
+    rb->lcd_set_background(LCD_DEFAULT_BG);
+#endif
+    snow_init();
+    while (1) {
+        snow_move();
+        mylcd_update();
+#ifdef HAVE_REMOTE_LCD
+        rb->lcd_remote_update();
+#endif
+        rb->sleep(HZ/20);
+        
+                /*We get button from PLA this way */
+        button = pluginlib_getaction(TIMEOUT_NOBLOCK, plugin_contexts,
+                               ARRAYLEN(plugin_contexts));
+
+        if ((button == SNOW_QUIT) || (button == SNOW_QUIT2))
+        {
+            return PLUGIN_OK;
+        }
+        else
+            if (rb->default_event_handler(button) == SYS_USB_CONNECTED)
+            {
+                return PLUGIN_USB_CONNECTED;
+            }
+    }
+}
+

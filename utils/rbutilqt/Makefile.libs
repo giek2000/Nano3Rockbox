@@ -1,0 +1,79 @@
+#             __________               __   ___.
+#   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+#   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+#   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+#   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+#                     \/            \/     \/    \/            \/
+#
+
+ifndef V
+SILENT = @
+endif
+
+TARGET_DIR ?= $(abspath .)/build/
+BUILD_DIR ?= $(abspath .)/build/
+# allow using this Makefile directly. Otherwise those variables are set via
+# the generated one.
+ifndef RBBASE_DIR
+RBBASE_DIR := $(dir $(lastword $(MAKEFILE_LIST)))/../../
+endif
+EXTRALIBS_CC ?= gcc
+EXTRALIBS_AR ?= ar
+
+# re-export variables that might have been set via command line.
+# If set via command line sub-makefiles cannot override them, so use different
+# variable names in the calling makefile.
+export APPVERSION=\"rbutil\"
+export SYS_SPEEX
+export TARGET_DIR
+export RBBASE_DIR
+export CFLAGS=$(EXTRALIB_CFLAGS)
+export CXXFLAGS=$(EXTRALIB_CXXFLAGS)
+export CC=$(EXTRALIBS_CC)
+export CXX=$(EXTRALIBS_CXX)
+export AR=$(EXTRALIBS_AR)
+export ISYSROOT=$(EXTRALIB_ISYSROOT)
+
+libs: librbspeex libucl libipodpatcher libsansapatcher libmkamsboot libmktccboot libmkmpioboot libchinachippatcher libmkimxboot libmks5lboot libbspatch libbz2 librbtomcrypt
+
+# To support cross compiles, we explicitly pass the CC flag below for
+# all tools which override CC or CXX in their makefiles. CXX is only
+# used by mkimxboot.
+
+librbtomcrypt:
+	$(SILENT) $(MAKE) -C $(RBBASE_DIR)/utils/tomcrypt BUILD_DIR=$(BUILD_DIR)/tomcrypt librbtomcrypt.a
+librbspeex:
+	$(SILENT) $(MAKE) -C $(RBBASE_DIR)/tools/rbspeex BUILD_DIR=$(BUILD_DIR)/libspeex librbspeex.a
+
+libucl:
+	$(SILENT)$(MAKE) -C $(RBBASE_DIR)/tools/ucl/src BUILD_DIR=$(BUILD_DIR)/ucl libucl.a
+
+libipodpatcher:
+	$(SILENT)$(MAKE) -C $(RBBASE_DIR)/utils/ipodpatcher BUILD_DIR=$(BUILD_DIR)/ipodpatcher libipodpatcher.a CC=$(CC)
+
+libsansapatcher:
+	$(SILENT)$(MAKE) -C $(RBBASE_DIR)/utils/sansapatcher BUILD_DIR=$(BUILD_DIR)/sansapatcher libsansapatcher.a CC=$(CC)
+
+libmkamsboot:
+	$(SILENT)$(MAKE) -C $(RBBASE_DIR)/utils/mkamsboot BUILD_DIR=$(BUILD_DIR)/mkamsboot libmkamsboot.a CC=$(CC)
+
+libmktccboot:
+	$(SILENT)$(MAKE) -C $(RBBASE_DIR)/utils/mktccboot BUILD_DIR=$(BUILD_DIR)/mktccboot libmktccboot.a CC=$(CC)
+
+libmkmpioboot:
+	$(SILENT)$(MAKE) -C $(RBBASE_DIR)/utils/mkmpioboot BUILD_DIR=$(BUILD_DIR)/mkmpioboot libmkmpioboot.a CC=$(CC)
+
+libchinachippatcher:
+	$(SILENT)$(MAKE) -C $(RBBASE_DIR)/utils/chinachippatcher BUILD_DIR=$(BUILD_DIR)/chinachippatcher libchinachippatcher.a CC=$(CC)
+
+libmkimxboot:
+	$(SILENT)$(MAKE) -C $(RBBASE_DIR)/utils/mkimxboot BUILD_DIR=$(BUILD_DIR)/mkimxboot libmkimxboot.a CC=$(CC) CXX=$(CXX)
+
+libmks5lboot:
+	$(SILENT)$(MAKE) -C $(RBBASE_DIR)/utils/mks5lboot BUILD_DIR=$(BUILD_DIR)/mks5lboot libmks5lboot.a CC=$(CC)
+
+libbz2:
+	$(SILENT)$(MAKE) -C $(RBBASE_DIR)/utils/bzip2 BUILD_DIR=$(BUILD_DIR)/bzip2 libbz2.a CC=$(CC)
+
+libbspatch:
+	$(SILENT)$(MAKE) -C $(RBBASE_DIR)/utils/bspatch BUILD_DIR=$(BUILD_DIR)/bspatch libbspatch.a CC=$(CC)

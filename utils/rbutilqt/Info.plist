@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleExecutable</key>
+	<string>RockboxUtility</string>
+	<key>CFBundleName</key>
+	<string>Rockbox Utility</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.5.2</string>
+	<key>CFBundleIconFile</key>
+	<string>rbutilqt.icns</string>
+	<key>CFBundleIdentifier</key>
+	<string>org.rockbox.rbutil</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSHighResolutionCapable</key>
+	<string>True</string>
+</dict>
+</plist>

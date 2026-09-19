@@ -1,0 +1,133 @@
+\subsection{Solitaire}
+\screenshot{plugins/images/ss-solitaire}{Klondike solitaire}{fig:solitaire}
+
+This is the classic Klondike solitaire game for Rockbox.
+This is probably the best-known solitaire in the world. Many people 
+do not even realize that other games exist. Though the name may not 
+be familiar, the game itself certainly is. This is due in no small 
+part to Microsoft's inclusion of the the game in every version of 
+Windows. Though popular, the odds of winning are rather low, perhaps 
+one in thirty hands.
+
+For the full set of rules to the game, and other interesting information
+visit
+\url{http://www.solitairecentral.com/rules/Klondike.html}
+
+\begin{btnmap}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IAUDIO_X5_PAD%
+        ,GIGABEAT_PAD,GIGABEAT_S_PAD,MROBE100_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,PBELL_VIBE500_PAD%
+        ,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD,RG_NANO_PAD}
+      {\ButtonUp{} / \ButtonDown}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD,SANSA_E200_PAD,SANSA_FUZE_PAD}{\ButtonScrollFwd{} / \ButtonScrollBack}
+    \opt{IRIVER_H10_PAD}{\ButtonScrollUp{} / \ButtonScrollDown}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IAUDIO_X5_PAD%
+        ,GIGABEAT_PAD,GIGABEAT_S_PAD,MROBE100_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,IPOD_4G_PAD%
+        ,IPOD_3G_PAD,SANSA_E200_PAD,SANSA_FUZE_PAD,IRIVER_H10_PAD,PBELL_VIBE500_PAD%
+        ,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD,RG_NANO_PAD}
+      {/ \ButtonLeft{} / \ButtonRight}
+    \opt{COWON_D2_PAD}{\TouchTopMiddle{} / \TouchBottomMiddle{} / \TouchMidLeft{} / \TouchMidRight}
+    \opt{XDUOO_X3_PAD}{\ButtonPrev / \ButtonNext / \ButtonHome / \ButtonOption}
+    \opt{MPIO_HD300_PAD}{\ButtonRew / \ButtonFF}
+       \opt{HAVEREMOTEKEYMAP}{& }
+      & Move Cursor around.\\
+    %
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,IPOD_4G_PAD,IPOD_3G_PAD,IAUDIO_X5_PAD%
+      ,SANSA_E200_PAD,SANSA_FUZE_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD%
+      ,MROBE100_PAD,SANSA_FUZEPLUS_PAD}
+      {\ButtonSelect}
+    \opt{IRIVER_H10_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD,XDUOO_X3_PAD}{\ButtonPlay}
+    \opt{COWON_D2_PAD}{\TouchCenter}
+    \opt{PBELL_VIBE500_PAD}{\ButtonOK}
+    \opt{MPIO_HD300_PAD}{\ButtonEnter}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonA}
+      & Select cards, move cards, reveal hidden cards...\\
+    %
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonMode}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD,MROBE100_PAD}
+      {\ButtonMenu}
+    \opt{IAUDIO_X5_PAD}{\ButtonPlay}
+    \opt{IRIVER_H10_PAD}{Long \ButtonLeft}
+    \opt{SANSA_E200_PAD}{\ButtonRec}
+    \opt{SANSA_FUZE_PAD}{\ButtonHome}
+    \opt{SANSA_C200_PAD,SANSA_CLIP_PAD}{\ButtonVolDown}
+    \opt{COWON_D2_PAD}{\TouchTopLeft}
+    \opt{PBELL_VIBE500_PAD,MPIO_HD300_PAD}{\ButtonMenu}
+    \opt{SANSA_FUZEPLUS_PAD}{\ButtonBack}
+    \opt{RG_NANO_PAD}{\ButtonX}
+    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonFF}
+       \opt{HAVEREMOTEKEYMAP}{& }
+      & If a card was selected -- unselect it, else\\
+       \opt{HAVEREMOTEKEYMAP}{& }
+      & Draw 3 new cards from the remains stack\\
+    %
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonPlay}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOn{} + \ButtonLeft}
+    \opt{IAUDIO_X5_PAD}{Long \ButtonPlay}
+    \opt{IRIVER_H10_PAD}{\ButtonFF}
+    \opt{SANSA_E200_PAD,SANSA_FUZE_PAD}{\ButtonLeft}
+    \opt{SANSA_C200_PAD}{\ButtonRec}
+    \opt{SANSA_CLIP_PAD}{\ButtonHome}
+    \opt{GIGABEAT_PAD}{\ButtonA{} + \ButtonLeft}
+    \opt{GIGABEAT_S_PAD}{\ButtonSelect{} + \ButtonLeft}
+    \opt{MROBE100_PAD}{\ButtonDisplay{} + \ButtonLeft}
+    \opt{COWON_D2_PAD}{\TouchTopRight}
+    \opt{PBELL_VIBE500_PAD}{\ButtonCancel}
+    \opt{MPIO_HD300_PAD}{\ButtonPlay}
+    \opt{SANSA_FUZEPLUS_PAD}{\ButtonBottomLeft}
+    \opt{SAMSUNG_YH92X_PAD}{\ButtonPlay{} + \ButtonDown}
+    \opt{SAMSUNG_YH820_PAD}{\ButtonRec{} + \ButtonDown}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonL}
+      & Put the card from the top of the remains stack on top of the cursor\\
+    %
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD%
+      ,MROBE100_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD}{Long \ButtonSelect}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{Long \ButtonMenu}
+    \opt{IAUDIO_X5_PAD}{Long \ButtonSelect}
+    \opt{IRIVER_H10_PAD}{\ButtonRew}
+    \opt{SANSA_E200_PAD}{\ButtonRec{} + \ButtonRight}
+    \opt{SANSA_FUZE_PAD}{\ButtonRight}
+    \opt{COWON_D2_PAD}{\TouchBottomLeft}
+    \opt{PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD}{\ButtonPlay}
+    \opt{MPIO_HD300_PAD}{\ButtonRec}
+    \opt{SAMSUNG_YH92X_PAD}{\ButtonPlay{} + \ButtonUp}
+    \opt{SAMSUNG_YH820_PAD}{\ButtonRec{} + \ButtonUp}
+    \opt{XDUOO_X3_PAD}{Long \ButtonPlay}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonB}
+      & Put the card under the cursor on one of the 4 final colour stacks.\\
+    %
+    \opt{IRIVER_H10_PAD,IPOD_4G_PAD,IPOD_3G_PAD}{Long \ButtonRight}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOn{} + \ButtonRight}
+    \opt{IAUDIO_X5_PAD}{\ButtonRec}
+    \opt{SANSA_E200_PAD}{\ButtonRight}
+    \opt{SANSA_FUZE_PAD}{Long \ButtonLeft}
+    \opt{GIGABEAT_PAD}{\ButtonA{} + \ButtonRight}
+    \opt{GIGABEAT_S_PAD}{\ButtonSelect{} + \ButtonRight}
+    \opt{MROBE100_PAD}{\ButtonDisplay{} + \ButtonRight}
+    \opt{SANSA_C200_PAD,SANSA_CLIP_PAD}{\ButtonVolUp}
+    \opt{COWON_D2_PAD}{\TouchBottomRight}
+    \opt{PBELL_VIBE500_PAD,MPIO_HD300_PAD,SANSA_FUZEPLUS_PAD}{Long \ButtonPlay}
+    \opt{SAMSUNG_YH92X_PAD}{\ButtonPlay{} + \ButtonRight}
+    \opt{SAMSUNG_YH820_PAD}{\ButtonRec{} + \ButtonRight}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonR}
+      & Put the card on top of the remains stack on one of the final colour stacks.\\
+    %
+    \opt{IRIVER_H300_PAD,IRIVER_H100_PAD}{\ButtonOff}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{Long \ButtonSelect}
+    \opt{IAUDIO_X5_PAD,IRIVER_H10_PAD,SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD%
+        ,GIGABEAT_PAD,MROBE100_PAD,COWON_D2_PAD,SANSA_FUZEPLUS_PAD}{\ButtonPower}
+    \opt{SANSA_FUZE_PAD}{Long \ButtonHome}
+    \opt{GIGABEAT_S_PAD}{\ButtonBack}
+    \opt{PBELL_VIBE500_PAD}{\ButtonRec}
+    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRew}
+    \opt{MPIO_HD300_PAD}{\ButtonMenu}
+    \opt{XDUOO_X3_PAD}{\ButtonPower}
+       \opt{HAVEREMOTEKEYMAP}{& 
+          \opt{IRIVER_RC_H100_PAD}{\ButtonRCStop}
+        }
+    \opt{RG_NANO_PAD}{\ButtonStart}
+      & Show menu\\
+\end{btnmap}

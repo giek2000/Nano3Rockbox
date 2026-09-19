@@ -1,0 +1,336 @@
+# /
+/build*
+/sim*
+/output
+*.elf
+*.exe
+*.so
+*.o
+*.a
+*~
+.cache
+
+__pycache__
+.DS_STORE
+
+# Intermediate language files
+/apps/lang/*.update
+/apps/lang/*.new
+
+# checkwps
+/tools/checkwps/output
+/tools/checkwps/Makefile
+/tools/checkwps/autoconf.h
+/tools/checkwps/make.dep
+/tools/checkwps/rockbox-info.txt
+/tools/checkwps/checkwps.failures
+
+# Release
+/tools/release/output
+
+# android: java build system
+/android/bin
+/android/data
+/android/gen
+/android/libs
+/android/local.properties
+
+# android: our build system
+/android/autoconf.h
+/android/Makefile
+/android/make.dep
+/android/apps
+/android/bitmaps
+/android/pluginbitmaps
+/android/firmware
+/android/lang
+/android/lib
+/android/rockbox.*
+/android/rockbox-info.txt
+/android/sysfont.c
+/android/sysfont.h
+/android/version.h
+/android/credits.raw
+
+# android: eclipse stuff
+/android/.settings
+
+# buflib test code
+/firmware/test/buflib/test_main
+/firmware/test/buflib/test_main2
+/firmware/test/buflib/test_max
+/firmware/test/buflib/test_move
+/firmware/test/buflib/test_move2
+/firmware/test/buflib/test_shrink
+/firmware/test/buflib/test_shrink_cb
+/firmware/test/buflib/test_shrink_startchanged
+/firmware/test/buflib/test_shrink_unaligned
+
+# /utils/
+/utils/Makefile
+
+# skin updater
+/utils/skinupdater/skinupdater
+
+# /utils/ipodpatcher/
+/utils/ipodpatcher/ipodpatcher
+
+# /utils/chinachippatcher/
+/utils/chinachippatcher/chinachip
+
+# /utils/bspatch/
+/utils/bspatch/bspatch
+
+# imxtools
+/utils/imxtools/misc/io_pins
+/utils/imxtools/misc/wiki_gen
+/utils/imxtools/scsitools/scsitool
+/utils/imxtools/sbtools/elftosb
+/utils/imxtools/sbtools/elftosb1
+/utils/imxtools/sbtools/rsrctool
+/utils/imxtools/sbtools/sbloader
+/utils/imxtools/sbtools/sbtoelf
+/utils/mkimxboot/mkimxboot
+
+# /utils/rbutilqt/
+/utils/rbutilqt/build
+/utils/rbutilqt/RockboxUtility
+/utils/rbutilqt/RockboxUtility.*
+/utils/rbutilqt/Makefile
+/utils/rbutilqt/*.qm
+/utils/rbutilqt/release
+/utils/rbutilqt/debug
+/utils/rbutilqt/*.Debug
+/utils/rbutilqt/*.Release
+/utils/rbutilqt/tags
+/utils/rbutilqt/.qmake.stash
+
+# /utils/rbutilqt/lang/
+/utils/rbutilqt/lang/*.qm
+
+# More target-specific utilities
+/utils/*/buildposix
+/utils/*/uninstall_script.[ch]
+/utils/*/install_script.[ch]
+/utils/e200tool/e200load
+/utils/mknwzboot/mknwzboot
+/utils/mkzenboot/mkzenboot
+/utils/sansapatcher/sansapatcher
+/utils/jztool/jztool
+/utils/tools/bin2c
+/utils/rk27utils/nandextract/nandextract
+/utils/rk27utils/rk27load/rk27load
+/utils/rk27utils/rkwtool/rkwtool
+/utils/rk27utils/rkusbtool/rkusbtool
+/utils/mkmpioboot/mkmpioboot
+/utils/mktccboot/mktccboot
+
+# /tools/
+/tools/bdf2bmp
+/tools/scramble
+/tools/generate_rocklatin
+/tools/descramble
+/tools/convbdf
+/tools/convttf
+/tools/bmp2rb
+/tools/codepages
+/tools/rdf2binary
+/tools/reggen
+/tools/mkboot
+/tools/mk500boot
+/tools/uclpack
+/tools/ipod_fw
+/tools/wavtrim
+/tools/voicefont
+/tools/rbspeexenc
+/tools/rbspeexdec
+/tools/mknkboot
+/tools/mktccboot
+/tools/mkzenboot
+/tools/mkspl-x1000
+/tools/iaudio_bl_flash.c
+/tools/iaudio_bl_flash.h
+/tools/.vagrant
+/tools/*-console.log
+/tools/*.dSYM
+
+# /tools/database/
+/tools/database/database
+
+# /tools/rbspeex/
+/tools/rbspeex/build*
+/tools/rbspeex/libspeex.a
+/tools/rbspeex/librbspeex.a
+/tools/rbspeex/dep-speex
+
+# /tools/ucl/src/
+/tools/ucl/src/libucl.a
+
+# /utils/MTP/
+/utils/MTP/sendfirm
+
+# /utils/MTP/beastpatcher/
+/utils/MTP/beastpatcher/bootimg.*
+/utils/MTP/beastpatcher/beastpatcher
+/utils/MTP/beastpatcher/bin2c*
+
+# /utils/MTP/beastpatcher/vs2005/
+/utils/MTP/beastpatcher/vs2005/*.ncb
+/utils/MTP/beastpatcher/vs2005/*.suo
+/utils/MTP/beastpatcher/vs2005/*.user
+/utils/MTP/beastpatcher/vs2005/Debug
+/utils/MTP/beastpatcher/vs2005/Release
+
+# /utils/jz4740_tools/
+/utils/jz4740_tools/HXFreplace
+/utils/jz4740_tools/HXF2IHFS
+/utils/jz4740_tools/usbtool
+/utils/jz4740_tools/DLanalyser
+/utils/jz4740_tools/HXFsplit
+/utils/jz4740_tools/HXFmerge
+/utils/jz4740_tools/IHFSsplit
+/utils/jz4740_tools/jz_xloader.*
+/utils/jz4740_tools/bin2c
+
+# /utils/jz4760_tools
+/utils/jz4760_tools/packtools
+/utils/jz4760_tools/usbboot
+
+# /utils/ingenic_tools
+/utils/ingenic_tools/usbboot
+
+# /utils/nwztools
+/utils/nwztools/scsitools/scsitool
+/utils/nwztools/upgtools/upgtool
+/utils/nwztools/emmctools/emmctool
+
+#  utils/rk27utils
+/utils/rk27utils/rkboottool/rkboottool
+
+# /utils/themeeditor/
+/utils/themeeditor/debug
+/utils/themeeditor/release
+/utils/themeeditor/build
+/utils/themeeditor/Makefile*
+/utils/themeeditor/object_script*
+/utils/themeeditor/rbthemeeditor
+
+# /utils/zenutils/
+/utils/zenutils/build
+/utils/zenutils/bin
+/utils/zenutils/CMakeCache.txt
+/utils/zenutils/CMakeFiles
+/utils/zenutils/cmake_install.cmake
+/utils/zenutils/Makefile
+
+# /utils/zenutils/libraries/
+/utils/zenutils/libraries/CMakeCache.txt
+/utils/zenutils/libraries/CMakeFiles
+/utils/zenutils/libraries/cmake_install.cmake
+/utils/zenutils/libraries/Makefile
+
+# /utils/zenutils/libraries/beecrypt-4.1.2/
+/utils/zenutils/libraries/beecrypt-4.1.2/CMakeCache.txt
+/utils/zenutils/libraries/beecrypt-4.1.2/CMakeFiles
+/utils/zenutils/libraries/beecrypt-4.1.2/cmake_install.cmake
+/utils/zenutils/libraries/beecrypt-4.1.2/Makefile
+
+# /utils/zenutils/libraries/beecrypt-4.1.2/beecrypt/
+/utils/zenutils/libraries/beecrypt-4.1.2/beecrypt/CMakeCache.txt
+/utils/zenutils/libraries/beecrypt-4.1.2/beecrypt/CMakeFiles
+/utils/zenutils/libraries/beecrypt-4.1.2/beecrypt/cmake_install.cmake
+/utils/zenutils/libraries/beecrypt-4.1.2/beecrypt/Makefile
+
+# /utils/zenutils/libraries/getpot-c++-1.1.18/
+/utils/zenutils/libraries/getpot-c++-1.1.18/CMakeCache.txt
+/utils/zenutils/libraries/getpot-c++-1.1.18/CMakeFiles
+/utils/zenutils/libraries/getpot-c++-1.1.18/cmake_install.cmake
+/utils/zenutils/libraries/getpot-c++-1.1.18/Makefile
+
+# /utils/zenutils/libraries/getpot-c++-1.1.18/getpot/
+/utils/zenutils/libraries/getpot-c++-1.1.18/getpot/CMakeCache.txt
+/utils/zenutils/libraries/getpot-c++-1.1.18/getpot/CMakeFiles
+/utils/zenutils/libraries/getpot-c++-1.1.18/getpot/cmake_install.cmake
+/utils/zenutils/libraries/getpot-c++-1.1.18/getpot/Makefile
+
+# /utils/zenutils/libraries/pelib-0.9/
+/utils/zenutils/libraries/pelib-0.9/CMakeCache.txt
+/utils/zenutils/libraries/pelib-0.9/CMakeFiles
+/utils/zenutils/libraries/pelib-0.9/cmake_install.cmake
+/utils/zenutils/libraries/pelib-0.9/Makefile
+
+# /utils/zenutils/libraries/pelib-0.9/pelib/
+/utils/zenutils/libraries/pelib-0.9/pelib/CMakeCache.txt
+/utils/zenutils/libraries/pelib-0.9/pelib/CMakeFiles
+/utils/zenutils/libraries/pelib-0.9/pelib/cmake_install.cmake
+/utils/zenutils/libraries/pelib-0.9/pelib/Makefile
+
+# /utils/zenutils/libraries/pelib-0.9/pelib/buffer/
+/utils/zenutils/libraries/pelib-0.9/pelib/buffer/CMakeCache.txt
+/utils/zenutils/libraries/pelib-0.9/pelib/buffer/CMakeFiles
+/utils/zenutils/libraries/pelib-0.9/pelib/buffer/cmake_install.cmake
+/utils/zenutils/libraries/pelib-0.9/pelib/buffer/Makefile
+
+# /utils/zenutils/libraries/zlib123/
+/utils/zenutils/libraries/zlib123/CMakeCache.txt
+/utils/zenutils/libraries/zlib123/CMakeFiles
+/utils/zenutils/libraries/zlib123/cmake_install.cmake
+/utils/zenutils/libraries/zlib123/Makefile
+
+# /utils/zenutils/libraries/zlib123/zlib/
+/utils/zenutils/libraries/zlib123/zlib/CMakeCache.txt
+/utils/zenutils/libraries/zlib123/zlib/CMakeFiles
+/utils/zenutils/libraries/zlib123/zlib/cmake_install.cmake
+/utils/zenutils/libraries/zlib123/zlib/Makefile
+
+# /utils/zenutils/source/
+/utils/zenutils/source/CMakeCache.txt
+/utils/zenutils/source/CMakeFiles
+/utils/zenutils/source/cmake_install.cmake
+/utils/zenutils/source/Makefile
+
+# /utils/zenutils/source/firmware_extract/
+/utils/zenutils/source/firmware_extract/CMakeCache.txt
+/utils/zenutils/source/firmware_extract/CMakeFiles
+/utils/zenutils/source/firmware_extract/cmake_install.cmake
+/utils/zenutils/source/firmware_extract/Makefile
+
+# /utils/zenutils/source/firmware_make/
+/utils/zenutils/source/firmware_make/CMakeCache.txt
+/utils/zenutils/source/firmware_make/CMakeFiles
+/utils/zenutils/source/firmware_make/cmake_install.cmake
+/utils/zenutils/source/firmware_make/Makefile
+
+# /utils/zenutils/source/shared/
+/utils/zenutils/source/shared/CMakeCache.txt
+/utils/zenutils/source/shared/CMakeFiles
+/utils/zenutils/source/shared/cmake_install.cmake
+/utils/zenutils/source/shared/Makefile
+
+# /utils/zenutils/source/update_extract/
+/utils/zenutils/source/update_extract/CMakeCache.txt
+/utils/zenutils/source/update_extract/CMakeFiles
+/utils/zenutils/source/update_extract/cmake_install.cmake
+/utils/zenutils/source/update_extract/Makefile
+
+# /utils/zenutils/source/update_patch/
+/utils/zenutils/source/update_patch/CMakeCache.txt
+/utils/zenutils/source/update_patch/CMakeFiles
+/utils/zenutils/source/update_patch/cmake_install.cmake
+/utils/zenutils/source/update_patch/Makefile
+
+# /utils/zenutils/source/zen_crypt/
+/utils/zenutils/source/zen_crypt/CMakeCache.txt
+/utils/zenutils/source/zen_crypt/CMakeFiles
+/utils/zenutils/source/zen_crypt/cmake_install.cmake
+/utils/zenutils/source/zen_crypt/Makefile
+
+# /utils/regtools/
+/utils/regtools/headergen_v1
+/utils/regtools/headergen_v2
+/utils/regtools/regtool
+/utils/regtools/swiss_knife
+/utils/regtools/tester_v1
+
+# /utils/time-sync/
+/utils/time-sync/time-sync

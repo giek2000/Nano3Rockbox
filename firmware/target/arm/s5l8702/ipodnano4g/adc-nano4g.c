@@ -1,0 +1,62 @@
+/***************************************************************************
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
+ *
+ * Copyright (C) 2009 by Bertrik Sikken
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+ * KIND, either express or implied.
+ *
+ ****************************************************************************/
+
+#include "config.h"
+
+#include "inttypes.h"
+#include "s5l87xx.h"
+#include "adc.h"
+#include "adc-target.h"
+#include "pmu-target.h"
+#include "kernel.h"
+
+/* Returns battery voltage [millivolts] */
+unsigned int adc_read_battery_voltage(void)
+{
+    return 0;
+}
+
+/* API functions */
+unsigned short adc_read(int channel)
+{
+    (void) channel;
+    return 0;
+}
+
+int adc_read_accessory_resistor(void)
+{
+    return 0;
+}
+
+unsigned int adc_read_usbdata_voltage(bool dp)
+{
+    (void)dp;
+    return 0;
+}
+
+const char *adc_name(int channel)
+{
+    (void) channel;
+    return "";
+}
+
+void adc_init(void)
+{
+}

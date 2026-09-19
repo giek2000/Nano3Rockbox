@@ -1,0 +1,5021 @@
+#!/bin/sh
+#             __________               __   ___.
+#   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+#   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+#   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+#   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+#                     \/            \/     \/    \/            \/
+#
+
+# global CC options for all platforms
+CCOPTS="-W -Wall -Wextra -Wundef -Os -nostdlib -ffreestanding -Wstrict-prototypes -pipe -std=gnu11 -funit-at-a-time -fno-delete-null-pointer-checks -fno-strict-overflow -fno-common"
+
+# LD options for the core
+LDOPTS=""
+# LD options for the core + plugins
+GLOBAL_LDOPTS=""
+LDMAP_OPT="-Map"
+
+extradefines=""
+use_logf="#undef ROCKBOX_HAS_LOGF"
+use_bootchart="#undef DO_BOOTCHART"
+use_logf_serial="#undef LOGF_SERIAL"
+
+rbdir="/.rockbox"
+bindir=
+libdir=
+sharedir=
+sdl_config=sdl2-config
+arm_thumb_boot=
+thread_support="ASSEMBLER_THREADS"
+sysfont="08-Schumacher-Clean"
+app_lcd_width=
+app_lcd_height=
+app_lcd_orientation=
+
+# Properly retain command line arguments containing spaces
+cmdline=
+for arg in "$@"; do
+  case "$arg" in
+    *\ *) cmdline="$cmdline \"$arg\"";;
+    *)    cmdline="$cmdline $arg";;
+  esac
+done
+
+#
+# Begin Function Definitions
+#
+input() {
+    read response
+    echo $response
+}
+
+prefixtools () {
+ prefix="$1"
+ if [ -n "$ARG_COMPILER_PREFIX" ]; then
+  echo "WARNING: asked to override target toolchain $1 with $ARG_COMPILER_PREFIX"
+  echo "WARNING: overriding the toolchain means you are running an untested configuration"
+  echo "WARNING: you build might be broken because of that"
+  prefix="$ARG_COMPILER_PREFIX"
+ fi
+ CC=${prefix}gcc
+ CPP=${prefix}cpp
+ WINDRES=${prefix}windres
+ DLLTOOL=${prefix}dlltool
+ DLLWRAP=${prefix}dllwrap
+ RANLIB=${prefix}gcc-ranlib
+ LD=${prefix}ld
+ AR=${prefix}gcc-ar
+ AS=${prefix}as
+ OC=${prefix}objcopy
+}
+
+app_set_paths () {
+    # setup files and paths depending on the platform
+    if [ -z "$ARG_PREFIX" ]; then
+        sharedir="/usr/local/share/rockbox"
+        bindir="/usr/local/bin"
+        libdir="/usr/local/lib"
+    else
+        if [ -d "$ARG_PREFIX" ]; then
+            if [ -z `echo $ARG_PREFIX | grep "^/"` ]; then
+                ARG_PREFIX=`realpath $ARG_PREFIX`
+                if [ "0" != "$?" ]; then
+                    echo "ERROR: Could not get prefix path (is realpath installed?)."
+                    exit
+                fi
+            fi
+            sharedir="$ARG_PREFIX/share/rockbox"
+            bindir="$ARG_PREFIX/bin"
+            libdir="$ARG_PREFIX/lib"
+        else
+            echo "ERROR: PREFIX directory $ARG_PREFIX does not exist"
+            exit
+        fi
+    fi
+}
+
+# Set the application LCD size according to the following priorities:
+# 1) If --lcdwidth and --lcdheight are set, use them
+# 2) If a size is passed to the app_set_lcd_size() function, use that
+# 3) Otherwise ask the user
+app_set_lcd_size () {
+    if [ -z "$ARG_LCDWIDTH" ]; then
+        ARG_LCDWIDTH=$1
+    fi
+    if [ -z "$ARG_LCDHEIGHT" ]; then
+        ARG_LCDHEIGHT=$2
+    fi
+
+    echo "Enter the LCD width (default: 320)"
+    if [ -z "$ARG_LCDWIDTH" ]; then
+        app_lcd_width=`input`
+    else
+        app_lcd_width="$ARG_LCDWIDTH"
+    fi
+    if [ -z "$app_lcd_width" ]; then app_lcd_width="320"; fi
+    echo "Enter the LCD height (default: 480)"
+    if [ -z "$ARG_LCDHEIGHT" ]; then
+        app_lcd_height=`input`
+    else
+        app_lcd_height="$ARG_LCDHEIGHT"
+    fi
+    if [ -z "$app_lcd_height" ]; then app_lcd_height="480"; fi
+    if [ $app_lcd_width -gt $app_lcd_height ]; then
+        lcd_orientation="landscape"
+    else
+        lcd_orientation="portrait"
+    fi
+    echo "Selected $app_lcd_width x $app_lcd_height resolution ($lcd_orientation)"
+    ARG_LCDWIDTH=$app_lcd_width
+    ARG_LCDHEIGHT=$app_lcd_height
+
+    app_lcd_width="#define LCD_WIDTH $app_lcd_width"
+    app_lcd_height="#define LCD_HEIGHT $app_lcd_height"
+}
+
+findarmgcc() {
+  prefixtools arm-elf-eabi-
+  gccchoice="9.5.0"
+}
+
+# scan the $PATH for the given command
+findtool(){
+  file="$1"
+
+  IFS=":"
+  for path in $PATH
+  do
+    # echo "checks for $file in $path" >&2
+    if test -f "$path/$file"; then
+      echo "$path/$file"
+      return
+    fi
+  done
+  # check whether caller wants literal return value if not found
+  if [ "$2" = "--lit" ]; then
+    echo "$file"
+  fi
+}
+
+# scan the $PATH for ${sdl_config} - check whether for a (cross-)win32
+# sdl as requested
+findsdl(){
+  files=${sdl_config}
+  if [ -n "$CROSS_COMPILE" ]; then
+    # ${sdl_config} might (not) be prefixed for cross compiles so try both.
+    files="${CROSS_COMPILE}${sdl_config}:${files}"
+  fi
+  winbuild="$1"
+
+  paths2check="$PATH"
+
+  if [ -n "$CROSS_COMPILE" ]; then
+    # add cross compile sys-root-directories to search in:
+    sysroot=$($CPP --print-sysroot 2>&1)
+    if [ $? -eq 0 ];
+    then
+      subdirs="bin:mingw/bin:sbin:mingw/sbin"
+      IFS=":"
+      for subdir in $subdirs
+      do
+        if [ -e "${sysroot}/${subdir}" ]; then
+          paths2check="${sysroot}/${subdir}:${paths2check}"
+        fi
+      done
+    else
+      echo "WARNING: unable to get sys-root directory from your cross-compiler" >&2
+      echo "WARNING: $CPP --print-sysroot returns" >&2
+      echo "WARNING: ${sysroot}" >&2
+    fi
+  fi
+
+  # search for the correct ${sdl_config}
+  IFS=":"
+  for path in $paths2check
+  do
+    for file in $files
+    do
+      if test -f "$path/$file"; then
+        if [ "0" != `$path/$file --libs |grep -c mwindows` ]; then
+          if [ "yes" = "${winbuild}" ]; then
+            echo "$path/$file"
+            return
+          fi
+        else
+          if [ "yes" != "${winbuild}" ]; then
+            echo "$path/$file"
+            return
+          fi
+        fi
+      fi
+    done
+  done
+}
+
+# check for availability of sigaltstack to support our thread engine
+check_sigaltstack() {
+   cat >$tmpdir/check_threads.c <<EOF
+#include <signal.h>
+int main(int argc, char **argv)
+{
+#ifndef NULL
+  #define NULL (void*)0
+#endif
+  sigaltstack(NULL, NULL);
+  return 0;
+}
+EOF
+   $CC -o $tmpdir/check_threads $tmpdir/check_threads.c 1> /dev/null
+   result=$?
+   rm -rf $tmpdir/check_threads*
+   echo $result
+}
+
+# check for availability of Fiber on Win32 to support our thread engine
+check_fiber() {
+   cat >$tmpdir/check_threads.c <<EOF
+#include <windows.h>
+int main(int argc, char **argv)
+{
+  ConvertThreadToFiber(NULL);
+  return 0;
+}
+EOF
+   $CC -o $tmpdir/check_threads $tmpdir/check_threads.c 2>/dev/null
+   result=$?
+   rm -rf $tmpdir/check_threads*
+   echo $result
+}
+
+simcc () {
+ # default tool setup for native building
+ prefixtools "$CROSS_COMPILE"
+ ARG_ARM_THUMB=0 # can't use thumb in native builds
+
+ # unset arch if already set shcc() and friends
+ arch=
+ arch_version=
+
+ app_type=$1
+ winbuild=""
+ macbuild=""
+ GCCOPTS=`echo $CCOPTS | sed -e s/\ -ffreestanding// -e s/\ -nostdlib//`
+
+ if [ "yes" = "$use_debug" ]; then
+    GCCOPTS=`echo $GCCOPTS | sed -e s/\ -Os/\ -Og/`
+ fi
+
+ GCCOPTS="$GCCOPTS -fno-builtin -g"
+
+ if [ "$ARG_ADDR_SAN" = "1" ] ; then
+   # Use AddressSanitizer!
+   echo "Using AddressSanitizer"
+   GCCOPTS="$GCCOPTS -fsanitize=address -fPIC"
+   LDOPTS="$LDOPTS -fsanitize=address -lasan"
+ fi
+
+ if [ "$ARG_UBSAN" = "1" ] ; then
+   echo "Using UBSan"
+   GCCOPTS="$GCCOPTS -fsanitize=undefined -fPIC"
+   LDOPTS="$LDOPTS -fsanitize=undefined"
+ fi
+
+ # Clear FUNKEY_SDK SDL1.2 path from LDOPTS
+ if [ "$modelname" = "rgnano" ]; then
+   LDOPTS=""
+ fi
+
+ # Some linux setups like to warn about unused results. They are correct,
+ # but cleaning this up is a lot of work.
+ GCCOPTS="$GCCOPTS -Wno-unused-result"
+ GCCOPTIMIZE=''
+ LDOPTS="$LDOPTS -lm" # button-sdl.c uses sqrt()
+ sigaltstack=""
+ fibers=""
+ endian="" # endianess of the dap doesnt matter here
+
+ # build a 32-bit simulator
+ if [ "$ARG_32BIT" = "1" ]; then
+     echo "Building 32-bit simulator"
+     GCCOPTS="$GCCOPTS -m32"
+     LDOPTS="$LDOPTS -m32"
+ fi
+
+ # default output binary name, don't override app_get_platform()
+ if [ "$app_type" != "sdl-app" ]; then
+    output="rockboxui"
+ fi
+
+ # default share option, override below if needed
+ SHARED_LDFLAGS="-shared"
+ SHARED_CFLAGS="-fPIC -fvisibility=hidden"
+
+ if [ "$win32crosscompile" = "yes" ]; then
+   # We are crosscompiling
+   # add cross-compiler option(s)
+   GCCOPTS="$GCCOPTS -Wno-format"
+   LDOPTS="$LDOPTS -mconsole -static"
+   GLOBAL_LDOPTS=`echo $GLOBAL_LDOPTS | sed -e s/\-Wl,-z,defs//`
+   GLOBAL_LDOPTS=`echo $GLOBAL_LDOPTS | sed -e s/\-Wl,-z,noexecstack//`
+   LDOPTS=`echo $LDOPTS | sed -e s/-ldl// -e s/-lrt// -e s/-lasound//`
+   output="$output.exe"
+   winbuild="yes"
+
+   if [ -z "$CROSS_COMPILE" ]; then
+     if [ "$win64" = "yes" ]; then
+       CROSS_COMPILE=${CROSS_COMPILE:-"x86_64-w64-mingw32-"}
+     else
+       # different possible names; try to find the correct one:
+       names="i686-w64-mingw32 i686-pc-mingw32 i586-mingw32msvc"
+
+       for name in $names
+       do
+         if which "${name}-gcc" >/dev/null 2>&1 ; then
+           CROSS_COMPILE="${name}-"
+           break
+         fi
+       done
+
+       if [ -z "$CROSS_COMPILE" ]; then
+         echo "WARNING: unable to find cross-compiler for 32-bit Windows environment!"
+         echo "WARNING: it's none of \"$names\"."
+         echo "WARNING: set your compiler prefix with CROSS_COMPILE=\"your-prefix-\" and"
+         echo "WARNING: re-run configure again!"
+         exit 2
+       fi
+     fi
+   fi
+   SHARED_CFLAGS=''
+   prefixtools "$CROSS_COMPILE"
+   fibers=`check_fiber`
+   endian="little" # windows is little endian
+   echo "Enabling MMX support"
+   # -mno-ms-bitfields is a workaround for http://gcc.gnu.org/bugzilla/show_bug.cgi?id=52991
+   # mingw-gcc >= 4.7 defaults to -mms-bitfields which breaks __attribute__((packed))
+   # disable it explicitly for the time being (it doesn't appear to be required for us)
+   GCCOPTS="$GCCOPTS -mmmx -mno-ms-bitfields"
+ else
+ case $uname in
+   CYGWIN*)
+   echo "Cygwin host detected"
+
+   fibers=`check_fiber`
+   LDOPTS="$LDOPTS -mconsole"
+   output="$output.exe"
+   winbuild="yes"
+   SHARED_CFLAGS=''
+   ;;
+
+   MINGW*)
+   echo "MinGW host detected"
+
+   fibers=`check_fiber`
+   LDOPTS="$LDOPTS -mconsole"
+   output="$output.exe"
+   winbuild="yes"
+   ;;
+
+   Linux)
+   sigaltstack=`check_sigaltstack`
+   echo "Linux host detected"
+   LDOPTS="$LDOPTS -ldl"
+   # newer glibc implementations use byteswap.h
+   if echo "#include <byteswap.h>" | gcc -E - > /dev/null 2>&1; then
+       echo "Using byteswap.h"
+       extradefines="$extradefines -DOS_USE_BYTESWAP_H"
+   fi
+   ;;
+
+   FreeBSD)
+   sigaltstack=`check_sigaltstack`
+   echo "FreeBSD host detected"
+   LDOPTS="$LDOPTS"
+   ;;
+
+   Darwin)
+   # FIXME: sigaltstack fails with "Operation not permitted"
+   # in make_context (firmware/asm/thread-unix.c) on latest
+   # versions of macOS (≥ 26.4). Fall back to SDL threads.
+   echo "Darwin host detected"
+   if $CC --version | grep -q "clang"; then
+    CC=gcc-16
+    AR=gcc-ar-16
+    CPP=cpp-16
+   fi
+   LDOPTS="$LDOPTS -ldl"
+   SHARED_LDFLAGS="-dynamiclib -Wl,-no_warn_duplicate_libraries"
+   LDMAP_OPT="-map"
+   macbuild="yes"
+   ;;
+
+   SunOS)
+   sigaltstack=`check_sigaltstack`
+   echo "*Solaris host detected"
+
+   GCCOPTS="$GCCOPTS -fPIC"
+   LDOPTS="$LDOPTS -ldl"
+   ;;
+
+   *)
+   echo "[ERROR] Unsupported system: $uname, fix configure and retry"
+   exit 1
+   ;;
+ esac
+ fi
+
+ if [ "$winbuild" != "yes" ] && [ "$macbuild" != "yes" ]; then
+   GLOBAL_LDOPTS="$GLOBAL_LDOPTS -Wl,-z,defs"
+   if [ "`uname -m`" = "i686" ]; then
+     echo "Enabling MMX support"
+     GCCOPTS="$GCCOPTS -mmmx"
+   fi
+ fi
+
+ sdl=`findsdl $winbuild`
+
+ if [ -n `echo $app_type | grep "sdl"` ]; then
+    if [ -z "$sdl" ]; then
+        echo "configure didn't find ${sdl_config}, which indicates that you"
+        echo "don't have SDL (properly) installed. Please correct and"
+        echo "re-run configure!"
+        exit 2
+    else
+        echo Using $sdl - version `$sdl --version`
+
+        # generic ${sdl_config} checker
+        sdlccopts=$($sdl --cflags)
+        if $sdl --static-libs > /dev/null 2>&1 ; then
+          sdlldopts=$(CC="$CC" $sdl --static-libs)
+        else
+          echo "Your ${sdl_config} does not know about static libs, falling back to shared library"
+          sdlldopts=$($sdl --libs)
+#          if [ "$win32crosscompile" = "yes" ] ; then
+              LDOPTS=`echo $LDOPTS | sed -e s/-static//`
+#          fi
+        fi
+        GCCOPTS="$GCCOPTS ${sdlccopts}"
+        LDOPTS="$LDOPTS ${sdlldopts}"
+    fi
+ fi
+
+
+ GCCOPTS="$GCCOPTS -I\$(SIMDIR)"
+ # x86_64 supports MMX by default
+
+  if [ "$endian" = "" ]; then
+    id=$$
+    cat >$tmpdir/conftest-$id.c <<EOF
+#include <stdio.h>
+int main(int argc, char **argv)
+{
+int var=0;
+char *varp = (char *)&var;
+*varp=1;
+
+printf("%d\n", var);
+return 0;
+}
+EOF
+    $CC -o $tmpdir/conftest-$id $tmpdir/conftest-$id.c 2>/dev/null
+    # when cross compiling, the endianess cannot be detected because the above program doesn't run
+    # on the local machine. assume little endian but print a warning
+    endian=`$tmpdir/conftest-$id 2> /dev/null`
+    if [ "$endian" != "" ] && [ $endian -gt "1" ]; then
+      # big endian
+      endian="big"
+    else
+      # little endian
+      endian="little"
+    fi
+  fi
+
+ if [ "$CROSS_COMPILE" != "" ]; then
+   echo "WARNING: Cross Compiling, cannot detect endianess. Assuming $endian endian!"
+ fi
+
+ if [ "$app_type" = "sdl-sim" ]; then
+   echo "Simulator environment deemed $endian endian"
+ elif [ "$app_type" = "sdl-app" ]; then
+   echo "Application environment deemed $endian endian"
+ elif [ "$app_type" = "checkwps" ]; then
+   echo "CheckWPS environment deemed $endian endian"
+ fi
+
+ # use wildcard here to make it work even if it was named *.exe like
+ # on cygwin
+ rm -f $tmpdir/conftest-$id*
+
+ # AddressSanitizer requires SDL threads
+ if [ "$ARG_ADDR_SAN" = "1" ] ; then
+     ARG_THREAD_SUPPORT=1
+ fi
+ if [ "$ARG_UBSAN" = "1" ] ; then
+     ARG_THREAD_SUPPORT=1
+ fi
+
+ thread_support=
+ if [ -z "$ARG_THREAD_SUPPORT" ] || [ "$ARG_THREAD_SUPPORT" = "0" ]; then
+   if [ "$sigaltstack" = "0" ]; then
+     thread_support="HAVE_SIGALTSTACK_THREADS"
+     LDOPTS="$LDOPTS -lpthread" # pthread needed
+     echo "Selected sigaltstack threads"
+   elif [ "$fibers" = "0" ]; then
+     thread_support="HAVE_WIN32_FIBER_THREADS"
+     echo "Selected Win32 Fiber threads"
+   fi
+ fi
+
+ if [ -n `echo $app_type | grep "sdl"` ] && [ -z "$thread_support" ] \
+    && [ "$ARG_THREAD_SUPPORT" != "0" ]; then
+   thread_support="HAVE_SDL_THREADS"
+   if [ "$ARG_THREAD_SUPPORT" = "1" ]; then
+     echo "Selected SDL threads"
+   else
+     echo "WARNING: Falling back to SDL threads"
+   fi
+ fi
+}
+
+#
+# functions for setting up cross-compiler names and options
+# also set endianess and what the exact recommended gcc version is
+# the gcc version should most likely match what versions we build with
+# rockboxdev.sh
+#
+
+coldfirecc () {
+ prefixtools m68k-elf-
+ GCCOPTS="$CCOPTS -mcpu=5249 -malign-int -mstrict-align"
+ GCCOPTIMIZE="-fomit-frame-pointer"
+ endian="big"
+ gccchoice="9.5.0"
+}
+
+arm7tdmicc () {
+ findarmgcc
+ GCCOPTS="$CCOPTS -mcpu=arm7tdmi"
+ GCCOPTIMIZE="-fomit-frame-pointer"
+ endian="little"
+}
+
+arm9tdmicc () {
+ findarmgcc
+ GCCOPTS="$CCOPTS -mcpu=arm9tdmi"
+ GCCOPTIMIZE="-fomit-frame-pointer"
+ endian="little"
+}
+
+arm940tcc () {
+ findarmgcc
+ GCCOPTS="$CCOPTS -mcpu=arm940t"
+ GCCOPTIMIZE="-fomit-frame-pointer"
+ endian="little"
+}
+
+arm926ejscc () {
+ findarmgcc
+ GCCOPTS="$CCOPTS -mcpu=arm926ej-s"
+ GCCOPTIMIZE="-fomit-frame-pointer"
+ endian="little"
+}
+
+arm1136jfscc () {
+ findarmgcc
+ GCCOPTS="$CCOPTS -mcpu=arm1136jf-s -mfloat-abi=softfp"
+ GCCOPTIMIZE="-fomit-frame-pointer"
+ endian="little"
+}
+
+arm1176jzscc () {
+ findarmgcc
+ GCCOPTS="$CCOPTS -mcpu=arm1176jz-s"
+ GCCOPTIMIZE="-fomit-frame-pointer"
+ endian="little"
+}
+
+arm7ejscc () {
+ findarmgcc
+ GCCOPTS="$CCOPTS -march=armv5te"
+ GCCOPTIMIZE="-fomit-frame-pointer"
+ endian="little"
+}
+
+armcortexm7cc () {
+ findarmgcc
+ GCCOPTS="$CCOPTS -march=armv7e-m -mcpu=cortex-m7"
+ GCCOPTIMIZE="-fomit-frame-pointer"
+ endian="little"
+}
+
+mipselcc () {
+ prefixtools mipsel-elf-
+ # mips is predefined, but we want it for paths. use __mips instead
+ GCCOPTS="$CCOPTS -march=mips32 -mtune=r4600 -mno-mips16 -mno-long-calls -Umips"
+ GCCOPTS="$GCCOPTS -ffunction-sections -msoft-float -G 0 -Wno-parentheses"
+ GCCOPTIMIZE="-fomit-frame-pointer"
+ endian="little"
+ gccchoice="9.5.0"
+}
+
+mipsr2elcc () {
+ prefixtools mipsel-elf-
+ # mips is predefined, but we want it for paths. use __mips instead
+ GCCOPTS="$CCOPTS -march=mips32r2 -mno-mips16 -mno-long-calls -Umips"
+ GCCOPTS="$GCCOPTS -ffunction-sections -msoft-float -G 0 -Wno-parentheses"
+ GCCOPTIMIZE="-fomit-frame-pointer"
+ endian="little"
+ gccchoice="9.5.0"
+}
+
+arm1176jzlinuxcc () {
+ GCCOPTS=`echo $CCOPTS | sed -e s/-ffreestanding// -e s/-nostdlib//`
+ # Although the ARM1176JZ-S supports unaligned accesses, those seems to disabled
+ # by the kernel. Since GCC emits unaligned accesses by default on ARMv6, we
+ # need to disable that
+ GCCOPTS="$GCCOPTS -mcpu=arm1176jz-s -mno-unaligned-access -mfloat-abi=softfp"
+ GCCOPTIMIZE=''
+ LDOPTS="-lasound -lpthread -lm -ldl -lrt $LDOPTS"
+ GLOBAL_LDOPTS="$GLOBAL_LDOPTS -Wl,-z,defs" # warn about undefined symbols in shared libraries
+ GLOBAL_LDOPTS="$GLOBAL_LDOPTS -Wl,-z,noexecstack" # Stack is not executable
+ SHARED_LDFLAGS="-shared"
+ SHARED_CFLAGS=''
+ endian="little"
+ app_type="ypr0"
+
+ # Include path
+ GCCOPTS="$GCCOPTS  -D_GNU_SOURCE=1 -U_FORTIFY_SOURCE -D_REENTRANT"
+
+ # Set up compiler
+ gccchoice="9.5.0"
+ prefixtools "arm-rockbox-linux-gnueabi-"
+}
+
+ypr0cc () {
+ arm1176jzlinuxcc
+ app_type="ypr0"
+}
+
+sonynwzcc () {
+ arm1176jzlinuxcc
+ app_type="sonynwz"
+}
+
+androidcc () {
+    if [ -z "$ANDROID_SDK_PATH" ]; then
+        echo "ERROR: You need the Android SDK installed and have the ANDROID_SDK_PATH"
+        echo "environment variable point to the root directory of the Android SDK."
+        exit
+    fi
+    if [ -z "$ANDROID_NDK_PATH" ]; then
+        echo "ERROR: You need the Android NDK installed (r10e to r17) and have the ANDROID_NDK_PATH"
+        echo "environment variable point to the root directory of the Android NDK."
+        exit
+    fi
+    make_toolchain="${ANDROID_NDK_PATH}/build/tools/make-standalone-toolchain.sh"
+    if [ ! -f "$make_toolchain" ]; then
+        echo "ERROR: You need the Android NDK installed (r10e to r17). Please note that"
+        echo "versions newer than r17 are not supported because they do not contain GCC."
+        exit
+    fi
+
+    # the prebuilt android NDK only supports x86_64 architecture anyway, so we can take shortcuts
+    buildhost=$(uname | tr "[:upper:]" "[:lower:]")-x86_64
+    GCCOPTS=`echo $CCOPTS | sed -e s/-ffreestanding// -e s/-nostdlib//`
+    LDOPTS="$LDOPTS -ldl -llog"
+    if [ "$modelname" != "ibassodx50" ] && [ "$modelname" != "ibassodx90" ]; then
+        LDOPTS="$LDOPTS -Wl,-soname,librockbox.so -shared"
+    fi
+    SHARED_LDFLAGS="-shared"
+    SHARED_CFLAGS=''
+    GLOBAL_LDOPTS="-Wl,-z,defs -Wl,-z,noexecstack"
+    thread_support="HAVE_SIGALTSTACK_THREADS"
+    ANDROID_ARCH=$2 # for android.make too
+    ANDROID_PLATFORM_VERSION=$1
+    GCCOPTS="$GCCOPTS $3"
+    gccchoice="4.9"
+    rm -rf "${pwd}/android-toolchain" # old toolchain must be removed before running script
+    # arch dependant stuff
+    case $ANDROID_ARCH in
+        armeabi)
+            endian="little"
+            gcctarget="arm-linux-androideabi-"
+            echo "${make_toolchain} --toolchain=arm-linux-androideabi-${gccchoice} --platform=android-$ANDROID_PLATFORM_VERSION --install-dir=${pwd}/android-toolchain"
+            ${make_toolchain} --toolchain=arm-linux-androideabi-${gccchoice} --platform=android-$ANDROID_PLATFORM_VERSION --install-dir=${pwd}/android-toolchain
+            if [ ${?} != 0 ]; then
+                exit
+            fi
+	    # Android 4.4 (API 19) doesn't support anything older than armv7.
+            GCCOPTS="$GCCOPTS -fomit-frame-pointer -fuse-ld=bfd"
+            ;;
+        aarch64)
+            endian="little"
+            gcctarget="arm-linux-androideabi-"
+            echo "${make_toolchain} --toolchain=aarch64-linux-android-${gccchoice} --platform=android-$ANDROID_PLATFORM_VERSION --install-dir=${pwd}/android-toolchain"
+            ${make_toolchain} --toolchain=aarch64-linux-android-${gccchoice} --platform=android-$ANDROID_PLATFORM_VERSION --install-dir=${pwd}/android-toolchain
+            if [ ${?} != 0 ]; then
+                exit
+            fi
+            GCCOPTS="$GCCOPTS -fomit-frame-pointer -fuse-ld=bfd"  # what default cpu arch/tune to use?
+            ;;
+        mips)
+            endian="little"
+            gcctarget="mipsel-linux-android-"
+            echo "${make_toolchain} --toolchain=mipsel-linux-android-${gccchoice} --platform=android-$ANDROID_PLATFORM_VERSION --install-dir=${pwd}/android-toolchain"
+            ${make_toolchain} --toolchain=mipsel-linux-android-${gccchoice} --platform=android-$ANDROID_PLATFORM_VERSION --install-dir=${pwd}/android-toolchain
+            if [ ${?} != 0 ]; then
+                exit
+            fi
+            GCCOPTS="$GCCOPTS -march=mips32 -mtune=r4600 -mno-mips16 -mno-long-calls -fomit-frame-pointer -fPIC"
+            ;;
+        x86)
+            endian="little"
+            gcctarget="i686-linux-android-"
+            echo "${make_toolchain} --toolchain=x86-${gccchoice} --platform=android-android-$ANDROID_PLATFORM_VERSION --install-dir=${pwd}/android-toolchain"
+            ${make_toolchain} --toolchain=x86-${gccchoice} --platform=android-$ANDROID_PLATFORM_VERSION --install-dir=${pwd}/android-toolchain
+            if [ ${?} != 0 ]; then
+                exit
+            fi
+            GCCOPTS="$GCCOPTS -Wa,--noexecstack -ffunction-sections -fomit-frame-pointer"
+            ;;
+        *)
+            echo "ERROR: androidcc(): Unknown target architecture"
+            exit
+            ;;
+    esac
+
+    LDOPTS="$LDOPTS -fuse-ld=bfd --sysroot=${pwd}/android-toolchain/sysroot"
+    GCCOPTS="$GCCOPTS --sysroot=${pwd}/android-toolchain/sysroot"
+    echo "Using endian ${endian}"
+    echo "Using gccchoice ${gccchoice}"
+    echo "Using gcctarget ${gcctarget}"
+    PATH=$PATH:${pwd}/android-toolchain/bin
+    prefixtools $gcctarget
+}
+
+androidndkcc()
+{
+    if ! [ -d "$ANDROID_NDK_PATH" ]; then
+        echo "ERROR: You need the Android NDK installed (r10e or higher) and have the ANDROID_NDK_PATH"
+        echo "environment variable point to the root directory of the Android NDK."
+        exit
+    fi
+
+    make_toolchain="${ANDROID_NDK_PATH}/build/tools/make-standalone-toolchain.sh"
+
+    if ! [ -e "${make_toolchain}" ]; then
+        echo "ERROR: ${make_toolchain} could not be found."
+        exit
+    fi
+
+    # the prebuilt android NDK only supports x86_64 architecture anyway, so we can take shortcuts
+    buildhost=$(uname -s | tr "[:upper:]" "[:lower:]")-x86_64
+
+    GCCOPTS=`echo $CCOPTS | sed -e s/-ffreestanding// -e s/-nostdlib//`
+    LDOPTS="$LDOPTS -ldl -llog"
+    SHARED_LDFLAGS="-shared"
+    SHARED_CFLAGS=''
+    GLOBAL_LDOPTS="-Wl,-z,defs -Wl,-z,noexecstack"
+
+    ANDROID_PLATFORM_VERSION=$1
+    GCCOPTS="$GCCOPTS $3"
+
+    # arch dependant stuff
+    case $2 in
+        armeabi)
+            endian="little"
+            gccchoice="4.9"
+            gcctarget="arm-linux-androideabi-"
+            echo "${make_toolchain} --toolchain=arm-linux-androideabi-4.9 --platform=android-$ANDROID_PLATFORM_VERSION --install-dir=${pwd}/android-toolchain"
+            ${make_toolchain} --toolchain=arm-linux-androideabi-4.9 --platform=android-$ANDROID_PLATFORM_VERSION --install-dir=${pwd}/android-toolchain
+            if [ ${?} != 0 ]; then
+                exit
+            fi
+            GCCOPTS="$GCCOPTS -fomit-frame-pointer"
+            ;;
+        *)
+            echo "ERROR: androidndkcc(): Unknown target architecture"
+            exit
+            ;;
+    esac
+
+    # -fuse-ld=bfd is needed because toolchain defaults to 'gold'
+    # which often crashes when linking.
+    LDOPTS="$LDOPTS -fuse-ld=bfd --sysroot=${pwd}/android-toolchain/sysroot"
+    GCCOPTS="$GCCOPTS -fuse-ld=bfd --sysroot=${pwd}/android-toolchain/sysroot"
+
+    echo "Using endian ${endian}"
+    echo "Using gccchoice ${gccchoice}"
+    echo "Using gcctarget ${gcctarget}"
+
+    PATH=$PATH:${pwd}/android-toolchain/bin
+    prefixtools $gcctarget
+}
+
+mipsellinuxcc () {
+ GCCOPTS=`echo $CCOPTS | sed -e s/-ffreestanding// -e s/-nostdlib//`
+ GCCOPTS="$GCCOPTS -march=mips32r2 -mhard-float -mno-mips16 -mno-long-calls -Umips -fPIC"
+ GCCOPTIMIZE=''
+ LDOPTS="-lasound -lpthread -lm -ldl -lrt $LDOPTS"
+ GLOBAL_LDOPTS="$GLOBAL_LDOPTS -Wl,-z,defs"
+ SHARED_LDFLAGS="-shared"
+ SHARED_CFLAGS='-fPIC -fvisibility=hidden'
+ endian="little"
+ thread_support="HAVE_SIGALTSTACK_THREADS"
+
+ # Include path
+ GCCOPTS="$GCCOPTS  -D_GNU_SOURCE=1 -U_FORTIFY_SOURCE -D_REENTRANT"
+
+ # Set up compiler
+ gccchoice="9.5.0"
+ prefixtools "mipsel-rockbox-linux-gnu-"
+}
+
+rgnanocc () {
+    if [ -z "$FUNKEY_SDK_PATH" ]; then
+        echo "ERROR: You need the FunKey-SDK installed and have the FUNKEY_SDK_PATH"
+        echo "environment variable point to the root directory of the FunKey-SDK."
+        echo "More info at https://wiki.funkey-project.com/wiki/Setting_up_the_SDK"
+        exit
+    fi
+
+    $FUNKEY_SDK_PATH/relocate-sdk.sh
+
+    arch="arm"
+    arch_version="7"
+    arch_profile="classic"
+
+    CC=$FUNKEY_SDK_PATH/bin/arm-funkey-linux-musleabihf-gcc
+    CPP=$FUNKEY_SDK_PATH/bin/arm-funkey-linux-musleabihf-cpp
+    LD=$FUNKEY_SDK_PATH/bin/arm-funkey-linux-musleabihf-ld
+    AR=$FUNKEY_SDK_PATH/bin/arm-funkey-linux-musleabihf-gcc-ar
+    AS=$FUNKEY_SDK_PATH/bin/arm-funkey-linux-musleabihf-as
+    OC=$FUNKEY_SDK_PATH/bin/arm-funkey-linux-musleabihf-objcopy
+    WINDRES=$FUNKEY_SDK_PATH/bin/arm-funkey-linux-musleabihf-windres
+    DLLTOOL=$FUNKEY_SDK_PATH/bin/arm-funkey-linux-musleabihf-dlltool
+    DLLWRAP=$FUNKEY_SDK_PATH/bin/arm-funkey-linux-musleabihf-dllwrap
+    RANLIB=$FUNKEY_SDK_PATH/bin/arm-funkey-linux-musleabihf-gcc-ranlib
+
+    GCCOPTS=`echo $CCOPTS | sed -e s/\ -ffreestanding// -e s/\ -nostdlib//`
+
+    if [ "yes" = "$use_debug" ]; then
+        GCCOPTS=`echo $GCCOPTS | sed -e s/\ -Os/\ -Og/`
+    fi
+
+    GCCOPTS="$GCCOPTS -fno-builtin -g -Wno-unused-result"
+    GCCOPTS="$GCCOPTS -I$FUNKEY_SDK_PATH/arm-funkey-linux-musleabihf/sysroot/usr/include/SDL"
+    GCCOPTS="$GCCOPTS -D_GNU_SOURCE=1 -D_REENTRANT -masm-syntax-unified"
+
+    SHARED_LDFLAGS="-shared"
+    SHARED_CFLAGS="-fPIC -fvisibility=hidden"
+
+    LDOPTS="-lm -ldl $LDOPTS -L$FUNKEY_SDK_PATH/arm-funkey-linux-musleabihf/sysroot/usr/lib -lSDL -lpthread"
+    GLOBAL_LDOPTS="$GLOBAL_LDOPTS -Wl,-z,defs"
+
+    thread_support="HAVE_SDL_THREADS"
+    sdl="$FUNKEY_SDK_PATH/arm-funkey-linux-musleabihf/sysroot/usr/bin/sdl-config"
+    rbdir="/FunKey/.rockbox"
+}
+
+devkitarmcc () {
+    if [ -z "$DEVKITPRO" ]; then
+        echo "ERROR: You need a devkitPro toolchain and libraries installed"
+        echo "and have the DEVKITPRO environment variable point to the root"
+        echo "of the devkitPro installation."
+        echo "More info at https://devkitpro.org/wiki/Getting_Started"
+        exit
+    fi
+
+    if [ -z "$DEVKITARM" ]; then
+        echo "ERROR: You need devkitARM toolchain installed and have the DEVKITARM"
+        echo "environment variable point to the root directory of the sdk."
+        exit
+    fi
+
+    # check for additional dependencies
+    if [ ! -e "$DEVKITPRO/portlibs/3ds/lib/libCTRL.a" ]; then
+        echo "ERROR: You need to install libCTRL utility library."
+        echo "https://github.com/kynex7510/CTRL"
+        exit
+    fi
+
+    if [ ! -e "$DEVKITPRO/portlibs/3ds/lib/libdl.a" ]; then
+        echo "ERROR: You need to install libdl implementation for 3ds (CTRDL)"
+        echo "https://github.com/kynex7510/CTRDL"
+        exit
+    fi
+
+    if [ ! -n "`findtool makerom`" ]; then
+        echo "ERROR: makerom not found, please install and run configure again."
+        echo "https://github.com/3DSGuy/Project_CTR"
+        exit
+    fi
+
+    if [ ! -n "`findtool bannertool`" ]; then
+        echo "ERROR: bannertool not found, please install and run configure again."
+        echo "https://github.com/carstene1ns/3ds-bannertool"
+        exit
+    fi
+
+    arch="arm"
+    arch_version="6"
+    arch_profile="classic"
+
+    CC=$DEVKITARM/bin/arm-none-eabi-gcc
+    CPP=$DEVKITARM/bin/arm-none-eabi-cpp
+    LD=$DEVKITARM/bin/arm-none-eabi-ld
+    AR=$DEVKITARM/bin/arm-none-eabi-gcc-ar
+    AS=$DEVKITARM/bin/arm-none-eabi-as
+    OC=$DEVKITARM/bin/arm-none-eabi-objcopy
+    WINDRES=windres
+    DLLTOOL=dlltool
+    DLLWRAP=dllwrap
+    RANLIB=$DEVKITARM/bin/arm-none-eabi-gcc-ranlib
+
+    # default cflags, we need -nostdlib and -ffreestanding for shared libraries to work in devkitARM
+    GCCOPTS="$CCOPTS"
+
+    if [ "yes" = "$use_debug" ]; then
+        GCCOPTS=`echo $GCCOPTS | sed -e s/\ -Os/\ -Og/`
+    fi
+
+    GCCOPTS="$GCCOPTS -fno-builtin -g -Wno-unused-result -Wno-char-subscripts"
+    GCCOPTS="$GCCOPTS -I$DEVKITPRO/libctru/include -I$DEVKITPRO/portlibs/3ds/include"
+    GCCOPTS="$GCCOPTS -mword-relocations -ffunction-sections -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft"
+    GCCOPTS="$GCCOPTS -D_GNU_SOURCE=1 -D_REENTRANT -masm-syntax-unified"
+
+    SHARED_LDFLAGS="-shared"
+    SHARED_CFLAGS="-fPIC -fvisibility=hidden"
+
+    LDOPTS="-specs=3dsx.specs -L$DEVKITPRO/libctru/lib -L$DEVKITPRO/portlibs/3ds/lib -ldl -lCTRL -lctru -lm"
+    GLOBAL_LDOPTS="$GLOBAL_LDOPTS -march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft"
+
+    # let's allow building shared libraries even if unresolved symbols are found,
+    # CTRDL (libdl) implementation will use a custom resolver for resolve symbols at runtime.
+    # TODO: use ResGen command to automatically detect unresolved symbols.
+    GLOBAL_LDOPTS=`echo $GLOBAL_LDOPTS | sed -e s/\-Wl,-z,defs//`
+
+    # devkitarm already defines getcwd
+    GLOBAL_LDOPTS="$GLOBAL_LDOPTS -Wl,-wrap,getcwd"
+
+    ARG_PREFIX="romfs"
+
+    extradefines="-D__3DS__"
+    rbdir="/3ds/.rockbox"
+}
+
+
+do_bootloader() {
+      appsdir='$(ROOTDIR)/bootloader'
+      apps="bootloader"
+      flash=""
+      if test -n "$boottool"; then
+          tool="$boottool"
+      fi
+      if test -n "$bootoutput"; then
+          output=$bootoutput
+      fi
+      if test -n "$arm_thumb_boot" && test -z "$ARG_ARM_THUMB"; then
+          ARG_ARM_THUMB=1
+      fi
+      extradefines="$extradefines -DBOOTLOADER -ffunction-sections -fdata-sections"
+      bootloader="1"
+      if [ -n "${sysfontbl}" ] ; then sysfont=$sysfontbl ; fi
+}
+
+whichadvanced () {
+  atype=`echo "$1" | cut -c 2-`
+  ##################################################################
+  # Prompt for specific developer options
+  #
+  if [ "$atype" ]; then
+    interact=
+  else
+    interact=1
+    echo ""
+    printf "Enter your developer options (press only enter when done)\n\
+(D)EBUG, (L)ogf, Boot(c)hart, (S)imulator, (B)ootloader, (P)rofiling, (V)oice, (U)SB Serial,\n\
+(W)in32 crosscompile, Win(6)4 crosscompile, (T)est plugins, (O)mit plugins, \n\
+S(m)all C lib, Logf to Ser(i)al port, LTO Build(X), (E)rror on warnings"
+    if [ "$modelname" = "iaudiom5" ]; then
+      printf ", (F)M radio MOD"
+    fi
+    if [ "$modelname" = "iriverh120" ]; then
+      printf ", (R)TC MOD"
+    fi
+    printf ":"
+    echo ""
+  fi
+
+  cont=1
+  while [ $cont = "1" ]; do
+
+    if [ "$interact" ]; then
+      option=`input`
+    else
+      option=`echo "$atype" | cut -c 1`
+    fi
+
+    case $option in
+      [Dd])
+        if [ "yes" = "$profile" ]; then
+          echo "Debug is incompatible with profiling"
+        else
+          echo "DEBUG build enabled"
+          use_debug="yes"
+        fi
+        ;;
+      [Ll])
+        echo "logf() support enabled"
+        logf="yes"
+        ;;
+      [Mm])
+        echo "Using Rockbox' small C library"
+        extradefines="$extradefines -DHAVE_ROCKBOX_C_LIBRARY"
+        ;;
+      [Tt])
+        echo "Including test plugins"
+        extradefines="$extradefines -DHAVE_TEST_PLUGINS"
+        ;;
+      [Oo])
+        echo "Disabling building of plugins"
+        plugins="no"
+        ;;
+      [Cc])
+        echo "bootchart enabled (logf also enabled)"
+        bootchart="yes"
+        logf="yes"
+        ;;
+      [Ii])
+        echo "Logf to serial port enabled (logf also enabled)"
+        logf="yes"
+        logf_serial="yes"
+        ;;
+      [Ss])
+        echo "Simulator build enabled"
+        simulator="yes"
+        ;;
+      [Bb])
+        echo "Bootloader build selected"
+        do_bootloader
+        ;;
+      [Pp])
+        if [ "yes" = "$use_debug" ]; then
+          echo "Profiling is incompatible with debug"
+        else
+          echo "Profiling support is enabled"
+          profile="yes"
+        fi
+        ;;
+      [Vv])
+        echo "Voice build selected"
+        voice="yes"
+        ;;
+      [Ff])
+        if [ "$modelname" = "iaudiom5" ]; then
+          have_fmradio_in="#define HAVE_FMRADIO_IN"
+          echo "FM radio functions enabled"
+        fi
+        ;;
+      [Rr])
+        if [ "$modelname" = "iriverh120" ]; then
+          config_rtc="#define CONFIG_RTC RTC_DS1339_DS3231"
+          have_rtc_alarm="#define HAVE_RTC_ALARM"
+          echo "RTC functions enabled (DS1339/DS3231)"
+        fi
+        ;;
+      [Uu])
+        echo "USB Serial support enabled"
+        use_usb_serial="#define USB_ENABLE_SERIAL"
+        logf="yes"
+        ;;
+      [Ww])
+        echo "Enabling Windows cross-compiling (32-bit)"
+        win32crosscompile="yes"
+        win64=""
+        ;;
+      [6])
+        echo "Enabling Windows cross-compiling (64-bit)"
+        win32crosscompile="yes"
+        win64="yes"
+        ;;
+      [Xx])
+        echo "LTO build enabled"
+        LTO_ARG="export USE_LTO=y"
+#       GCCOPTS=`echo $GCCOPTS | sed -e s/-funit-at-a-time/-flto/`
+        GCCOPTS="$GCCOPTS -flto"
+        GLOBAL_LDOPTS="-flto $GLOBAL_LDOPTS"
+        ;;
+      [Ee])
+        echo "Treating all warnings as errors"
+        GCCOPTS="$GCCOPTS -Werror"
+        CCOPTS="$CCOPTS -Werror"
+        ;;
+      "") # Match enter press when finished with advanced options
+        cont=0
+        ;;
+      *)
+        echo "[ERROR] Option $option unsupported"
+        ;;
+    esac
+    if [ "$interact" ]; then
+      btype="$btype$option"
+    else
+      atype=`echo "$atype" | cut -c 2-`
+      [ "$atype" ] || cont=0
+    fi
+  done
+  echo "done"
+
+  if [ "yes" = "$voice" ]; then
+    # Ask about languages to build
+    picklang
+    voicelanguage=`whichlang`
+    echo "Voice language set to $voicelanguage"
+
+    # Configure encoder and TTS engine for each language
+    for thislang in `echo $voicelanguage | sed 's/,/ /g'`; do
+      voiceconfig "$thislang"
+    done
+    if [ -z "$POOL" ] ; then
+	echo " \$POOL is not set, will use <builddir>/voice-pool by default"
+    fi
+  fi
+  if [ "yes" = "$use_debug" ]; then
+    debug="-DDEBUG"
+    GCCOPTS="$GCCOPTS -g -DDEBUG"
+  fi
+  if [ "yes" = "$logf" ]; then
+    use_logf="#define ROCKBOX_HAS_LOGF 1"
+  fi
+  if [ "yes" = "$logf_serial" ]; then
+    use_logf_serial="#define LOGF_SERIAL 1"
+  fi
+  if [ "yes" = "$bootchart" ]; then
+    use_bootchart="#define DO_BOOTCHART 1"
+  fi
+  if [ "yes" = "$simulator" ]; then
+    debug="-DDEBUG"
+    extradefines="$extradefines -DSIMULATOR -DHAVE_TEST_PLUGINS"
+    flash=""
+  fi
+  if [ "yes" = "$profile" ]; then
+    extradefines="$extradefines -DRB_PROFILE"
+    PROFILE_OPTS="-finstrument-functions"
+  fi
+}
+
+# Configure voice settings
+voiceconfig () {
+    thislang=$1
+    if [ ! "$ARG_TTS" ]; then
+        echo "Building $thislang voice for $modelname. Select options"
+        echo ""
+    fi
+
+    if [ -n "`findtool flite`" ]; then
+        FLITE="F(l)ite "
+        FLITE_OPTS=""
+        DEFAULT_TTS="flite"
+        DEFAULT_TTS_OPTS=$FLITE_OPTS
+        DEFAULT_CHOICE="l"
+    fi
+    if [ -n "`findtool espeak`" ]; then
+        ESPEAK="(e)Speak "
+        ESPEAK_OPTS=""
+        DEFAULT_TTS="espeak"
+        DEFAULT_TTS_OPTS=$ESPEAK_OPTS
+        DEFAULT_CHOICE="e"
+    fi
+    if [ -n "`findtool espeak-ng`" ]; then
+        ESPEAK="(e)Speak-ng "
+        ESPEAK_OPTS=""
+        DEFAULT_TTS="espeak-ng"
+        DEFAULT_TTS_OPTS=$ESPEAK_OPTS
+        DEFAULT_CHOICE="e"
+    fi
+    if [ -n "`findtool festival`" ]; then
+        FESTIVAL="(F)estival "
+        FESTIVAL_OPTS=""
+        DEFAULT_TTS="festival"
+        DEFAULT_TTS_OPTS=$FESTIVAL_OPTS
+        DEFAULT_CHOICE="f"
+    fi
+    if [ -n "`findtool mimic`" ]; then
+        MIMIC="(M)imic "
+        MIMIC_OPTS=""
+        DEFAULT_TTS="mimic"
+        DEFAULT_TTS_OPTS=$MIMIC_OPTS
+        DEFAULT_CHOICE="M"
+    fi
+    if [ -n "`findtool swift`" ]; then
+        SWIFT="S(w)ift "
+        SWIFT_OPTS=""
+        DEFAULT_TTS="swift"
+        DEFAULT_TTS_OPTS=$SWIFT_OPTS
+        DEFAULT_CHOICE="w"
+    fi
+    # Allow SAPI if Windows is in use
+    if [ -n "`findtool winver`" ]; then
+        SAPI="(S)API "
+        SAPI_OPTS=""
+        DEFAULT_TTS="sapi"
+        DEFAULT_TTS_OPTS=$SAPI_OPTS
+        DEFAULT_CHOICE="S"
+    fi
+    if [ -n "`findtool gtts-cli`" ]; then
+        GTTS="(g)tts "
+        GTTS_OPTS=""
+        DEFAULT_TTS="gtts"
+        DEFAULT_TTS_OPTS=$GTTS_OPTS
+        DEFAULT_CHOICE="g"
+    fi
+    if [ -n "`findtool piper`" ]; then
+        PIPER="(p)iper "
+        PIPER_OPTS=""
+        DEFAULT_TTS="piper"
+        DEFAULT_TTS_OPTS=$PIPER_OPTS
+        DEFAULT_CHOICE="p"
+    fi
+    if [ -n "`findtool rbspeak`" ]; then
+        RBSPEAK="(O)ther "
+        RBSPEAK_OPTS=""
+        DEFAULT_TTS="rbspeak"
+        DEFAULT_TTS_OPTS=$RBSPEAK_OPTS
+        DEFAULT_CHOICE="O"
+    fi
+
+    if [ "$FESTIVAL" = "$FLITE" ] && [ "$FLITE" = "$ESPEAK" ] && [ "$ESPEAK" = "$SAPI" ] && [ "$SAPI" = "$MIMIC" ] && [ "$MIMIC" = "$SWIFT" ] && [ "$SWIFT" = "$GTTS" ] && [ "$GTTS" = "$PIPER" ] && [ "$PIPER" = "$RBSPEAK" ] ; then
+        echo "You need Festival, eSpeak, Mimic, Flite, piper, gtts, or rbspeak in your path, or SAPI available to build voice files"
+        exit 3
+    fi
+
+    if [ "$ARG_TTS" ]; then
+        option=$ARG_TTS
+    else
+        echo "TTS engine to use: ${FLITE}${FESTIVAL}${ESPEAK}${MIMIC}${SAPI}${SWIFT}${GTTS}${RBSPEAK}${PIPER}(${DEFAULT_CHOICE})?"
+        option=`input`
+        if [ -z "$option" ]; then option=${DEFAULT_CHOICE}; fi
+        advopts="$advopts --tts=$option"
+    fi
+    case "$option" in
+        [Ll]|flite)
+        TTS_ENGINE="flite"
+        TTS_OPTS=$FLITE_OPTS
+        ;;
+        [Ee]|espeak)
+        TTS_ENGINE="espeak"
+        TTS_OPTS=$ESPEAK_OPTS
+        ;;
+        [Ff]|festival)
+        TTS_ENGINE="festival"
+        TTS_OPTS=$FESTIVAL_OPTS
+        ;;
+        [Mm]|mimic)
+        TTS_ENGINE="mimic"
+        TTS_OPTS=$MIMIC_OPTS
+        ;;
+        [Ss]|sapi)
+        TTS_ENGINE="sapi"
+        TTS_OPTS=$SAPI_OPTS
+        ;;
+	[Ww]|swift)
+        TTS_ENGINE="swift"
+        TTS_OPTS=$SWIFT_OPTS
+	;;
+	[Gg]|gtts)
+        TTS_ENGINE="gtts"
+        TTS_OPTS=$GTTS_OPTS
+	;;
+	[Pp]|piper)
+        TTS_ENGINE="piper"
+        TTS_OPTS=$PIPER_OPTS
+	;;
+	[Oo]|rbspeak)
+        TTS_ENGINE="rbspeak"
+        TTS_OPTS=$RBSPEAK_OPTS
+	;;
+        *)
+        TTS_ENGINE=$DEFAULT_TTS
+        TTS_OPTS=$DEFAULT_TTS_OPTS
+    esac
+    echo "Using $TTS_ENGINE for TTS"
+
+    # Select which voice to use for Festival
+    if [ "$TTS_ENGINE" = "festival" ]; then
+        voicelist=`echo "(voice.list)"|festival -i 2>/dev/null |tr "\n" " "|sed -e 's/.*festival> (\(.*\)) festival>/\1/'|sort`
+        for voice in $voicelist; do
+            TTS_FESTIVAL_VOICE="$voice" # Default choice
+            break
+        done
+        if [ "$ARG_VOICE" ]; then
+            CHOICE=$ARG_VOICE
+        else
+            i=1
+            for voice in $voicelist; do
+                printf "%3d. %s\n" "$i" "$voice"
+                i=`expr $i + 1`
+            done
+            printf "Please select which Festival voice to use (default is $TTS_FESTIVAL_VOICE): "
+            CHOICE=`input`
+        fi
+        i=1
+        for voice in $voicelist; do
+            if [ "$i" = "$CHOICE" -o "$voice" = "$CHOICE" ]; then
+                TTS_FESTIVAL_VOICE="$voice"
+            fi
+            i=`expr $i + 1`
+        done
+        advopts="$advopts --voice=$CHOICE"
+        echo "Festival voice set to $TTS_FESTIVAL_VOICE"
+        echo "(voice_$TTS_FESTIVAL_VOICE)" > festival-prolog.scm
+    elif [ "$TTS_ENGINE" = "piper" ]; then
+	if [ -z "$PIPER_MODEL_DIR" ]; then
+	    echo "Please set PIPER_MODEL_DIR!";
+	    exit 1
+	fi
+	models=`(cd $PIPER_MODEL_DIR ; ls -1 *onnx)`
+	for model in $models; do
+	    PIPER_MODEL="$model"  # Default
+	    break;
+        done
+        if [ "$ARG_VOICE" ]; then
+            CHOICE=$ARG_VOICE
+        else
+	    i=1
+	    for model in $models; do
+		printf "%3d. %s\n" "$i" "$model"
+                i=`expr $i + 1`
+            done
+            printf "Please select which piper model to use (default is $PIPER_MODEL): "
+            CHOICE=`input`
+	fi
+        i=1
+        for model in $models; do
+            if [ "$i" = "$CHOICE" -o "$model" = "$CHOICE" ]; then
+                PIPER_MODEL="$model"
+		break;
+            fi
+            i=`expr $i + 1`
+        done
+
+	TTS_OPTS="$TTS_OPTS --model $PIPER_MODEL_DIR/$PIPER_MODEL"
+        advopts="$advopts --voice=$PIPER_MODEL"
+        echo "Piper model set to $PIPER_MODEL"
+    elif [ "$TTS_ENGINE" = "mimic" ]; then
+	voicelist=`mimic -lv | cut -d':' -f2`
+        for voice in $voicelist; do
+            TTS_MIMIC_VOICE="$voice" # Default choice
+            break
+        done
+        if [ "$ARG_VOICE" ]; then
+            CHOICE=$ARG_VOICE
+        else
+            i=1
+            for voice in $voicelist; do
+                printf "%3d. %s\n" "$i" "$voice"
+                i=`expr $i + 1`
+            done
+            printf "Please select which Mimic voice to use (default is $TTS_MIMIC_VOICE): "
+            CHOICE=`input`
+        fi
+        i=1
+        for voice in $voicelist; do
+            if [ "$i" = "$CHOICE" -o "$voice" = "$CHOICE" ]; then
+                TTS_MIMIC_VOICE="$voice"
+		break
+            fi
+            i=`expr $i + 1`
+        done
+        advopts="$advopts --voice=$CHOICE"
+        echo "Mimic voice set to $TTS_MIMIC_VOICE"
+	TTS_OPTS="$TTS_OPTS -voice $TTS_MIMIC_VOICE"
+    elif [ "$TTS_ENGINE" = "espeak" ] ; then
+	if [ -n "`findtool espeak-ng`" ] ; then
+	    TTS_ENGINE="espeak-ng"
+	fi
+    fi
+
+    # Read custom tts options from command line
+    if [ "$ARG_TTSOPTS" ]; then
+        TTS_OPTS="$ARG_TTSOPTS"
+        echo "$TTS_ENGINE options set to $TTS_OPTS"
+    fi
+
+    ENCODER="rbspeexenc"
+    ENC_OPTS="-q 7 -c 10"
+
+    echo "Using $ENCODER for encoding voice clips"
+
+    # Read custom encoder options from command line
+    if [ "$ARG_ENCOPTS" ]; then
+        ENC_OPTS="$ARG_ENCOPTS"
+        echo "$ENCODER options set to $ENC_OPTS"
+    fi
+
+    TEMPDIR="${pwd}"
+    if [ -n "`findtool cygpath`" ]; then
+        TEMPDIR=`cygpath . -a -w`
+    fi
+}
+
+picklang() {
+    # figure out which languages that are around
+    for file in $rootdir/apps/lang/*.lang; do
+        clean=`basename $file .lang`
+        langs="$langs $clean"
+    done
+
+    if [ "$ARG_LANG" ]; then
+        pick=$ARG_LANG
+    else
+        echo "Select a number for the language to use (default is english)"
+        # FIXME The multiple-language feature is currently broken
+        # echo "You may enter a comma-separated list of languages to build"
+
+        num=1
+        for one in $langs; do
+            echo "$num. $one"
+            num=`expr $num + 1`
+        done
+        pick=`input`
+        advopts="$advopts --language=$pick"
+    fi
+}
+
+whichlang() {
+    output=""
+    # Allow the user to pass a comma-separated list of langauges
+    for thispick in `echo $pick | sed 's/,/ /g'`; do
+        num=1
+        for one in $langs; do
+            # Accept both the language number and name
+            if [ "$num" = "$thispick" ] || [ "$thispick" = "$one" ]; then
+                if [ "$output" = "" ]; then
+                    output=$one
+                else
+                    output=$output,$one
+                fi
+            fi
+            num=`expr $num + 1`
+        done
+    done
+    if [ -z "$output" ]; then
+      # pick a default
+      output="english"
+    fi
+    echo $output
+}
+
+help() {
+  echo "Rockbox configure script."
+  echo "Invoke this in a directory to generate a Makefile to build Rockbox"
+  echo "Do *NOT* run this within the tools directory!"
+  echo ""
+  cat <<EOF
+  Usage: configure [OPTION]...
+  Options:
+    --target=TARGET   Sets the target, TARGET can be either the target ID or
+                      corresponding string. Run without this option to see all
+                      available targets.
+
+    --ram=RAM         Sets the RAM for certain targets. Even though any number
+                      is accepted, not every number is correct. The default
+                      value will be applied, if you entered a wrong number
+                      (which depends on the target). Watch the output.  Run
+                      without this option if you are not sure which the right
+                      number is.
+
+    --type=TYPE       Sets the build type. Shortcuts are also valid.
+                      Run without this option to see all available types.
+                      Multiple values are allowed and managed in the input
+                      order. So --type=b stands for Bootloader build, while
+                      --type=ab stands for "Backlight MOD" build.
+
+    --lcdwidth=X      Sets the width of the LCD. Used only for application
+                      targets.
+
+    --lcdheight=Y     Sets the height of the LCD. Used only for application
+                      targets.
+
+    --language=LANG   Set the language used for voice generation (used only if
+                      TYPE is AV).
+
+    --tts=ENGINE      Set the TTS engine used for voice generation (used only
+                      if TYPE is AV).
+
+    --voice=VOICE     Set voice to use with selected TTS (used only if TYPE is
+                      AV).
+
+    --ttsopts=OPTS    Set TTS engine manual options (used only if TYPE is AV).
+
+    --encopts=OPTS    Set encoder manual options (used only if ATYPE is AV).
+
+    --rbdir=dir       Use alternative rockbox directory (default: ${rbdir}).
+                      This is useful for having multiple alternate builds on
+                      your device that you can load with ROLO. However as the
+                      bootloader looks for .rockbox you won't be able to boot
+                      into this build.
+
+    --ccache          Enable ccache use (done by default these days)
+    --no-ccache       Disable ccache use
+
+    --thumb           Build with -mthumb (for ARM builds)
+    --no-thumb        The opposite of --thumb (don't use thumb even for targets
+                      where this is the default
+    --sdl-threads     Force use of SDL threads. They have inferior performance,
+                      but are better debuggable with GDB and valgrind
+    --no-sdl-threads  Disallow use of SDL threads. This prevents the default
+                      behavior of falling back to them if no native thread
+                      support was found.
+    --with-address-sanitizer
+                      Enables the AddressSanitizer feature. Forces SDL threads.
+    --with-ubsan      Enables the UB Sanitizer feature.  Forces SDL threads.
+    --with-stack-protector[=MODE]
+                      Enable -fstack-protector-MODE option. With no MODE,
+                      enables the normal -fstack-protector option.
+    --32-bit          Force a 32-bit simulator (use with --sdl-threads for duke3d)
+    --prefix          Target installation directory
+    --compiler-prefix Override compiler prefix (inherently dangerous)
+    --help            Shows this message (must not be used with other options)
+
+EOF
+
+  exit
+}
+
+ARG_CCACHE=
+ARG_ENCOPTS=
+ARG_LANG=
+ARG_RAM=
+ARG_RBDIR=
+ARG_TARGET=
+ARG_TTS=
+ARG_TTSOPTS=
+ARG_TYPE=
+ARG_VOICE=
+ARG_ARM_THUMB=
+ARG_PREFIX="$PREFIX"
+ARG_THREAD_SUPPORT=
+ARG_32BIT=
+ARG_ADDR_SAN=
+ARG_UBSAN=
+ARG_STACK_PROTECTOR=
+ARG_PLUGINS=
+err=
+for arg in "$@"; do
+	case "$arg" in
+		--ccache)     ARG_CCACHE=1;;
+		--no-ccache)  ARG_CCACHE=0;;
+		--encopts=*)  ARG_ENCOPTS=`echo "$arg" | cut -d = -f 2`;;
+		--language=*) ARG_LANG=`echo "$arg" | cut -d = -f 2`;;
+		--lcdwidth=*) ARG_LCDWIDTH=`echo "$arg" | cut -d = -f 2`;;
+		--lcdheight=*) ARG_LCDHEIGHT=`echo "$arg" | cut -d = -f 2`;;
+		--ram=*)      ARG_RAM=`echo "$arg" | cut -d = -f 2`;;
+		--rbdir=*)    ARG_RBDIR=`echo "$arg" | cut -d = -f 2`;;
+		--target=*)   ARG_TARGET=`echo "$arg" | cut -d = -f 2`;;
+		--tts=*)      ARG_TTS=`echo "$arg" | cut -d = -f 2`;;
+		--ttsopts=*)  ARG_TTSOPTS=`echo "$arg" | cut -d = -f 2`;;
+		--type=*)     ARG_TYPE=`echo "$arg" | cut -d = -f 2`;;
+		--voice=*)    ARG_VOICE=`echo "$arg" | cut -d = -f 2`;;
+		--plugins=*)  ARG_PLUGINS=`echo "$arg" | cut -d = -f 2`;;
+		--thumb)      ARG_ARM_THUMB=1;;
+		--no-thumb)   ARG_ARM_THUMB=0;;
+		--32-bit)     ARG_32BIT=1;;
+        --sdl-threads)ARG_THREAD_SUPPORT=1;;
+        --no-sdl-threads)
+                      ARG_THREAD_SUPPORT=0;;
+        --with-address-sanitizer) ARG_ADDR_SAN=1;;
+        --with-ubsan) ARG_UBSAN=1;;
+        --with-stack-protector=*) ARG_STACK_PROTECTOR=`echo "$arg" | cut -d = -f 2`;;
+        --with-stack-protector) ARG_STACK_PROTECTOR=default;;
+        --prefix=*)   ARG_PREFIX=`echo "$arg" | cut -d = -f 2`;;
+        --compiler-prefix=*)   ARG_COMPILER_PREFIX=`echo "$arg" | cut -d = -f 2`;;
+		--help)       help;;
+		*)            err=1; echo "[ERROR] Option '$arg' unsupported";;
+	esac
+done
+[ "$err" ] && exit 1
+
+advopts=
+
+if [ "$TMPDIR" != "" ]; then
+  tmpdir=$TMPDIR
+else
+  tmpdir=/tmp
+fi
+echo Using temporary directory $tmpdir
+
+if test -r "configure"; then
+ # this is a check for a configure script in the current directory, if there
+ # is one, try to figure out if it is this one!
+
+ if { grep "^#   Jukebox" configure >/dev/null 2>&1 ; } then
+   echo "WEEEEEEEEP. Don't run this configure script within the tools directory."
+   echo "It will only cause you pain and grief. Instead do this:"
+   echo ""
+   echo " cd .."
+   echo " mkdir build-dir"
+   echo " cd build-dir"
+   echo " ../tools/configure"
+   echo ""
+   echo "Much happiness will arise from this. Enjoy"
+   exit 5
+ fi
+fi
+
+if test -r "tools/configure"; then
+ # this is a check for a configure script in the tools/ directory, if there
+ # is one, try to figure out if it is this one!
+
+ if { grep "^#   Jukebox" tools/configure >/dev/null 2>&1 ; } then
+   echo "WEEEEEEEEP. Don't run this configure script in the root of the tree."
+   echo "It will only cause you pain and grief. Instead do this:"
+   echo ""
+   echo " mkdir build-dir"
+   echo " cd build-dir"
+   echo " ../tools/configure"
+   echo ""
+   echo "Much happiness will arise from this. Enjoy"
+   exit 5
+ fi
+fi
+
+# get our current directory
+pwd=`pwd`;
+
+if { echo $pwd | grep " "; } then
+  echo "You're running this script in a path that contains space. The build"
+  echo "system is unfortunately not clever enough to deal with this. Please"
+  echo "run the script from a different path, rename the path or fix the build"
+  echo "system!"
+  exit 6
+fi
+
+if [ -z "$rootdir" ]; then
+  ##################################################################
+  # Figure out where the source code root is!
+  #
+  rootdir=`dirname $0`/../
+
+  #####################################################################
+  # Convert the possibly relative directory name to an absolute version
+  #
+  now=`pwd`
+  cd $rootdir
+  rootdir=`pwd`
+
+  # cd back to the build dir
+  cd $now
+fi
+
+apps="apps"
+appsdir='$(ROOTDIR)/apps'
+toolsdir='$(ROOTDIR)/tools'
+
+
+##################################################################
+# Figure out target platform
+#
+
+if [ "$ARG_TARGET" ]; then
+  buildfor=$ARG_TARGET
+else
+  echo "Enter target platform:"
+cat <<EOF
+ ==iriver==                ==Apple iPod==        ==Cowon/iAudio==
+ 10) H120/H140             20) Color/Photo       30) X5/X5V/X5L
+ 11) H320/H340             21) Nano 1G           31) M5/M5L
+ 12) iHP-100/110/115       22) Video             32) D2
+ 13) H10 20Gb              23) 3G                33) M3/M3L
+ 14) H10 5/6Gb             24) 4G Grayscale
+                           25) Mini 1G           ==SanDisk==
+ ==Toshiba==               26) Mini 2G           50) Sansa e200
+ 40) Gigabeat F/X          27) 1G, 2G            51) Sansa e200R
+ 41) Gigabeat S            28) Nano 2G           52) Sansa c200
+                           29) Classic/6G        55) Sansa Clip
+ ==Olympus=                80) Nano 3G (WIP)     56) Sansa e200v2
+ 70) M:Robe 500            81) Nano 4G (WIP)     57) Sansa m200v4
+ 71) M:Robe 100                                  58) Sansa Fuze
+                           ==Creative==          59) Sansa c200v2
+ ==Philips==               89) Zen X-Fi Style    60) Sansa Clipv2
+ 100) GoGear SA9200        93) Zen X-Fi2         62) Sansa Clip+
+ 101) GoGear HDD1630/      94) Zen X-Fi3         63) Sansa Fuze v2
+      HDD1830              95) Zen V             64) Sansa Fuze+
+ 102) GoGear HDD6330       96) Zen X-Fi          65) Sansa Clip Zip
+                           97) Zen Mozaic        66) Sansa Connect
+ ==Samsung==               98) Zen
+ 140) YH-820                                     ==Packard Bell==
+ 141) YH-920               ==Onda==              160) Vibe 500
+ 142) YH-925               120) VX747
+ 144) YP-R0                122) VX747+           ==ROCKCHIP==
+ 145) YP-R1 (WIP)          121) VX767            180) rk27xx generic
+                           123) VX777
+ ==HiFiMAN==                                     ==HiFi E.T.==
+ 190) HM-60x               ==MPIO==              210) MA9
+ 191) HM-801               170) HD200            211) MA9C
+                           171) HD300            212) MA8
+ ==Sony==                                        213) MA8C
+ 219) NWZ-E350 series      ==Application==
+ 220) NWZ-E370/E380 series 200) SDL (Generic)    ==IHIFI==
+ 221) NWZ-E360 series      201) Android (ARM)    230) 760
+ 222) NWZ-E450 series      202) Android (MIPS)   231) 770
+ 223) NWZ-E460 series      203) Android (x86)    232) 770C
+ 224) NWZ-E470 series      209) Anbernic RG Nano 233) 800
+ 225) NWZ-E580 series                            234) 960
+ 226) NWZ-A10 series       ==AgpTek==
+ 227) NW-A20 series        240) Rocker           ==AIGO==
+ 228) NWZ-A860 series                            245) Eros Q / K (hosted)
+ 229) NWZ-S750 series      ==iBasso==            247) Eros Q / K native
+                           250) DX50                   (hw1/hw2 bl, all hw rb)
+ ==FiiO==                  251) DX90             248) Eros Q / K native
+ 244) M3K Linux                                        (hw3 bl only)
+ 246) M3K baremetal        ==xDuoo==             249) Eros Q / K native
+                           241) X3                     (hw4 bl only)
+ ==Shanling==              242) X3II
+ 260) Q1                   243) X20              ==HiBy==
+                                                 300) R3 Pro II
+ ==Echo project==          ==Surfans==           301) R1
+ 270) Echo R1 (WIP)        280) F28 (WIP)
+                                                 ==Hidizs==
+ ==Nintendo==                                    302) AP80 Pro Max (WIP)
+ 290) Nintendo 3DS (WIP)
+
+EOF
+
+  buildfor=`input`;
+
+fi
+  # Set of tools built for all target platforms:
+  toolset="rdf2binary convbdf codepages"
+
+  # Toolsets for some target families:
+  iriverbitmaptools="$toolset scramble descramble mkboot bmp2rb"
+  iaudiobitmaptools="$toolset scramble descramble mkboot bmp2rb"
+  ipodbitmaptools="$toolset scramble bmp2rb"
+  gigabeatbitmaptools="$toolset scramble descramble bmp2rb"
+  tccbitmaptools="$toolset scramble bmp2rb"
+  # generic is used by IFP and Onda
+  genericbitmaptools="$toolset bmp2rb"
+  # scramble is used by all other targets
+  scramblebitmaptools="$genericbitmaptools scramble"
+  # used by X1000 targets
+  x1000tools="$genericbitmaptools scramble mkspl-x1000 uclpack"
+  # default to not generating ELF files
+  USE_ELF="no"
+  PLUGIN_USE_ELF="no"
+
+  #  ---- For each target ----
+  #
+  #   *Variables*
+  # target_id: a unique number identifying this target, IS NOT the menu number.
+  #            Just use the currently highest number+1 when you add a new
+  #            target.
+  # modelname: short model name used all over to identify this target
+  # memory:    number of megabytes of RAM this target has. If the amount can
+  #            be selected by the size prompt, let memory be unset here
+  #            Note for hosted/application builds, (memory-1) defines the
+  #            audiobuffer size; actual memory usage will likely be
+  #            larger and is found in rockbox-info.txt after compilation.
+  # target:    -Ddefine passed to the build commands to make the correct
+  #            config-*.h file get included etc
+  # tool:      the tool that takes a plain binary and converts that into a
+  #            working "firmware" file for your target
+  # output:    the final output file name
+  # boottool:  the tool that takes a plain binary and generates a bootloader
+  #            file for your target (or blank to use $tool)
+  # bootoutput:the final output file name for the bootloader (or blank to use
+  #            $output)
+  # appextra:  passed to the APPEXTRA variable in the Makefiles.
+  #            TODO: add proper explanation
+  # flash:     name of output for flashing, for targets where there's a special
+  #            file output for this.
+  # plugins:   set to 'yes' to build the plugins. Early development builds can
+  #            set this to no in the early stages to have an easier life for a
+  #            while
+  # toolset:   lists what particular tools in the tools/ directory that this
+  #            target needs to have built prior to building Rockbox
+  #
+  #   *Functions*
+  # *cc:       sets up gcc and compiler options for your target builds. Note
+  #            that if you select a simulator build, the compiler selection is
+  #            overridden later in the script.
+
+  case $buildfor in
+
+  10|iriverh120)
+    target_id=9
+    modelname="iriverh120"
+    target="IRIVER_H120"
+    memory=32 # always
+    coldfirecc
+    tool="$rootdir/tools/scramble -add=h120"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 2"
+    bmp2rb_remotemono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_remotenative="$rootdir/tools/bmp2rb -f 0"
+    output="rockbox.iriver"
+    bootoutput="bootloader.iriver"
+    appextra="recorder:gui:radio"
+    flash="$pwd/rombox.iriver"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$iriverbitmaptools
+    t_cpu="coldfire"
+    t_manufacturer="iriver"
+    t_model="h100"
+    ;;
+
+   11|iriverh300)
+    target_id=10
+    modelname="iriverh300"
+    target="IRIVER_H300"
+    memory=32 # always
+    coldfirecc
+    tool="$rootdir/tools/scramble -add=h300"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    bmp2rb_remotemono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_remotenative="$rootdir/tools/bmp2rb -f 0"
+    output="rockbox.iriver"
+    bootoutput="bootloader.iriver"
+    appextra="recorder:gui:radio"
+    flash="$pwd/rombox.iriver"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$iriverbitmaptools
+    t_cpu="coldfire"
+    t_manufacturer="iriver"
+    t_model="h300"
+    ;;
+
+   12|iriverh100)
+    target_id=11
+    modelname="iriverh100"
+    target="IRIVER_H100"
+    memory=16 # always
+    coldfirecc
+    tool="$rootdir/tools/scramble -add=h100"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 2"
+    bmp2rb_remotemono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_remotenative="$rootdir/tools/bmp2rb -f 0"
+    output="rockbox.iriver"
+    bootoutput="bootloader.iriver"
+    appextra="recorder:gui:radio"
+    flash="$pwd/rombox.iriver"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$iriverbitmaptools
+    t_cpu="coldfire"
+    t_manufacturer="iriver"
+    t_model="h100"
+    ;;
+
+   13|iriverh10)
+    target_id=22
+    modelname="iriverh10"
+    target="IRIVER_H10"
+    memory=32 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -mi4v3 -model=h10 -type=RBOS"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 5"
+    output="rockbox.mi4"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    boottool="$rootdir/tools/scramble -mi4v3 -model=h10 -type=RBBL"
+    bootoutput="H10_20GC.mi4"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$scramblebitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="iriver"
+    t_model="h10"
+    ;;
+
+   14|iriverh10_5gb)
+    target_id=24
+    modelname="iriverh10_5gb"
+    target="IRIVER_H10_5GB"
+    memory=32 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -mi4v2 -model=h105 -type=RBOS"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 5"
+    output="rockbox.mi4"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    boottool="$rootdir/tools/scramble -mi4v2 -model=h105 -type=RBBL"
+    bootoutput="H10.mi4"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$scramblebitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="iriver"
+    t_model="h10"
+    ;;
+
+   20|ipodcolor)
+    target_id=13
+    modelname="ipodcolor"
+    target="IPOD_COLOR"
+    memory=32 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -add=ipco"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 5"
+    output="rockbox.ipod"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    bootoutput="bootloader-$modelname.ipod"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$ipodbitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="ipod"
+    t_model="color"
+    ;;
+
+   21|ipodnano1g)
+    target_id=14
+    modelname="ipodnano1g"
+    target="IPOD_NANO"
+    memory=32 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -add=nano"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 5"
+    output="rockbox.ipod"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    bootoutput="bootloader-$modelname.ipod"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$ipodbitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="ipod"
+    t_model="nano"
+    ;;
+
+   22|ipodvideo)
+    target_id=15
+    modelname="ipodvideo"
+    target="IPOD_VIDEO"
+    memory=64 # always. This is reduced at runtime if needed
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -add=ipvd"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.ipod"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    bootoutput="bootloader-$modelname.ipod"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$ipodbitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="ipod"
+    t_model="video"
+    ;;
+
+   23|ipod3g)
+    target_id=16
+    modelname="ipod3g"
+    target="IPOD_3G"
+    memory=32 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -add=ip3g"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 6"
+    output="rockbox.ipod"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    bootoutput="bootloader-$modelname.ipod"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$ipodbitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="ipod"
+    t_model="3g"
+    ;;
+
+   24|ipod4g)
+    target_id=17
+    modelname="ipod4g"
+    target="IPOD_4G"
+    memory=32 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -add=ip4g"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 6"
+    output="rockbox.ipod"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    bootoutput="bootloader-$modelname.ipod"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$ipodbitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="ipod"
+    t_model="4g"
+    ;;
+
+   25|ipodmini1g)
+    target_id=18
+    modelname="ipodmini1g"
+    target="IPOD_MINI"
+    memory=32 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -add=mini"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 6"
+    output="rockbox.ipod"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    bootoutput="bootloader-$modelname.ipod"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$ipodbitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="ipod"
+    t_model="mini"
+    ;;
+
+   26|ipodmini2g)
+    target_id=21
+    modelname="ipodmini2g"
+    target="IPOD_MINI2G"
+    memory=32 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -add=mn2g"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 6"
+    output="rockbox.ipod"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    bootoutput="bootloader-$modelname.ipod"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$ipodbitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="ipod"
+    t_model="mini2g"
+    ;;
+
+   27|ipod1g2g)
+    target_id=29
+    modelname="ipod1g2g"
+    target="IPOD_1G2G"
+    memory=32 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -add=1g2g"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 6"
+    output="rockbox.ipod"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    bootoutput="bootloader-$modelname.ipod"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$ipodbitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="ipod"
+    t_model="1g2g"
+    ;;
+
+   28|ipodnano2g)
+    target_id=62
+    modelname="ipodnano2g"
+    target="IPOD_NANO2G"
+    memory=32 # always
+    arm940tcc
+    tool="$rootdir/tools/scramble -add=nn2g"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.ipod"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    bootoutput="bootloader-$modelname.ipod"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$ipodbitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="s5l8700"
+    t_model="ipodnano2g"
+    ;;
+
+   29|ipod6g)
+    target_id=71
+    modelname="ipod6g"
+    target="IPOD_6G"
+    memory=64 # always
+    arm926ejscc
+    tool="$rootdir/tools/scramble -add=ip6g"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.ipod"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    bootoutput="bootloader-$modelname.ipod"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$ipodbitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="s5l8702"
+    t_model="ipod6g"
+    ;;
+
+   30|iaudiox5)
+    target_id=12
+    modelname="iaudiox5"
+    target="IAUDIO_X5"
+    memory=16 # always
+    coldfirecc
+    tool="$rootdir/tools/scramble -add=iax5"
+    boottool="$rootdir/tools/scramble -iaudiox5"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    bmp2rb_remotemono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_remotenative="$rootdir/tools/bmp2rb -f 7"
+    output="rockbox.iaudio"
+    bootoutput="x5_fw.bin"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$iaudiobitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="coldfire"
+    t_manufacturer="iaudio"
+    t_model="x5"
+    ;;
+
+   31|iaudiom5)
+    target_id=28
+    modelname="iaudiom5"
+    target="IAUDIO_M5"
+    memory=16 # always
+    coldfirecc
+    tool="$rootdir/tools/scramble -add=iam5"
+    boottool="$rootdir/tools/scramble -iaudiom5"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 2"
+    bmp2rb_remotemono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_remotenative="$rootdir/tools/bmp2rb -f 7"
+    output="rockbox.iaudio"
+    bootoutput="m5_fw.bin"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$iaudiobitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="coldfire"
+    t_manufacturer="iaudio"
+    t_model="m5"
+    ;;
+
+   32|cowond2)
+    target_id=34
+    modelname="cowond2"
+    target="COWON_D2"
+    memory=32
+    arm926ejscc
+    tool="$rootdir/tools/scramble -add=d2"
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.d2"
+    bootoutput="bootloader-cowond2.bin"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset="$tccbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="tcc780x"
+    t_model="cowond2"
+    ;;
+
+   33|iaudiom3)
+    target_id=37
+    modelname="iaudiom3"
+    target="IAUDIO_M3"
+    memory=16 # always
+    coldfirecc
+    tool="$rootdir/tools/scramble -add=iam3"
+    boottool="$rootdir/tools/scramble -iaudiom3"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 7"
+    output="rockbox.iaudio"
+    bootoutput="cowon_m3.bin"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$iaudiobitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="coldfire"
+    t_manufacturer="iaudio"
+    t_model="m3"
+    ;;
+
+   40|gigabeatfx)
+    target_id=20
+    modelname="gigabeatfx"
+    target="GIGABEAT_F"
+    memory=32 # always
+    arm9tdmicc
+    tool="$rootdir/tools/scramble -add=giga"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.gigabeat"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset=$gigabeatbitmaptools
+    boottool="$rootdir/tools/scramble -gigabeat"
+    bootoutput="FWIMG01.DAT"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="s3c2440"
+    t_model="gigabeat-fx"
+    ;;
+
+   41|gigabeats)
+    target_id=26
+    modelname="gigabeats"
+    target="GIGABEAT_S"
+    memory=64
+    arm1136jfscc
+    tool="$rootdir/tools/scramble -add=gigs"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.gigabeat"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset="$gigabeatbitmaptools"
+    boottool="$rootdir/tools/scramble -gigabeats"
+    bootoutput="nk.bin"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="imx31"
+    t_model="gigabeat-s"
+    ;;
+
+   50|sansae200)
+    target_id=23
+    modelname="sansae200"
+    target="SANSA_E200"
+    memory=32 # supposedly
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -mi4v3 -model=e200 -type=RBOS"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.mi4"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    boottool="$rootdir/tools/scramble -mi4v3 -model=e200 -type=RBBL"
+    bootoutput="PP5022.mi4"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$scramblebitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="sandisk"
+    t_model="sansa-e200"
+    ;;
+
+   51|sansae200r)
+    # the e200R model is pretty much identical to the e200, it only has a
+    # different option to the scramble tool when building a bootloader and
+    # makes the bootloader output file name in all lower case.
+    target_id=27
+    modelname="sansae200r"
+    target="SANSA_E200"
+    memory=32 # supposedly
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -mi4v3 -model=e20r -type=RBOS"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.mi4"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    boottool="$rootdir/tools/scramble -mi4r -model=e20r -type=RBBL"
+    bootoutput="pp5022.mi4"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$scramblebitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="sandisk"
+    t_model="sansa-e200"
+    ;;
+
+   52|sansac200)
+    target_id=30
+    modelname="sansac200"
+    target="SANSA_C200"
+    memory=32 # supposedly
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -mi4v3 -model=c200 -type=RBOS"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.mi4"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    boottool="$rootdir/tools/scramble -mi4v3 -model=c200 -type=RBBL"
+    bootoutput="firmware.mi4"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$scramblebitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="sandisk"
+    t_model="sansa-c200"
+    ;;
+
+   55|sansaclip)
+    target_id=50
+    modelname="sansaclip"
+    target="SANSA_CLIP"
+    memory=2
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$bmp2rb_mono"
+    tool="$rootdir/tools/scramble -add=clip"
+    output="rockbox.sansa"
+    bootoutput="bootloader-clip.sansa"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="as3525"
+    t_model="sansa-clip"
+    sysfont="08-Rockfont"
+    if [ "$ARG_ARM_THUMB" != 0 ]; then ARG_ARM_THUMB=1; fi
+    arm9tdmicc
+    ;;
+
+   56|sansae200v2)
+    target_id=51
+    modelname="sansae200v2"
+    target="SANSA_E200V2"
+    memory=8
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="$rootdir/tools/scramble -add=e2v2"
+    output="rockbox.sansa"
+    bootoutput="bootloader-e200v2.sansa"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    arm_thumb_boot=1
+    t_cpu="arm"
+    t_manufacturer="as3525"
+    t_model="sansa-e200v2"
+    arm9tdmicc
+    ;;
+
+   57|sansam200v4)
+    target_id=52
+    modelname="sansam200v4"
+    target="SANSA_M200V4"
+    memory=2
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$bmp2rb_mono"
+    tool="$rootdir/tools/scramble -add=m2v4"
+    output="rockbox.sansa"
+    bootoutput="bootloader-m200v4.sansa"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="as3525"
+    t_model="sansa-m200v4"
+    sysfont="08-Rockfont"
+    if [ "$ARG_ARM_THUMB" != 0 ]; then ARG_ARM_THUMB=1; fi
+    arm9tdmicc
+    ;;
+
+   58|sansafuze)
+    target_id=53
+    modelname="sansafuze"
+    target="SANSA_FUZE"
+    memory=8
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="$rootdir/tools/scramble -add=fuze"
+    output="rockbox.sansa"
+    bootoutput="bootloader-fuze.sansa"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="as3525"
+    t_model="sansa-fuze"
+    arm9tdmicc
+    ;;
+
+   59|sansac200v2)
+    target_id=55
+    modelname="sansac200v2"
+    target="SANSA_C200V2"
+    memory=2 # as per OF diagnosis mode
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="$rootdir/tools/scramble -add=c2v2"
+    output="rockbox.sansa"
+    bootoutput="bootloader-c200v2.sansa"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$scramblebitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="as3525"
+    t_model="sansa-c200v2"
+    if [ "$ARG_ARM_THUMB" != 0 ]; then ARG_ARM_THUMB=1; fi
+    arm9tdmicc
+    ;;
+
+   60|sansaclipv2)
+    target_id=60
+    modelname="sansaclipv2"
+    target="SANSA_CLIPV2"
+    memory=8
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$bmp2rb_mono"
+    tool="$rootdir/tools/scramble -add=clv2"
+    output="rockbox.sansa"
+    bootoutput="bootloader-clipv2.sansa"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="as3525"
+    t_model="sansa-clipv2"
+    sysfont="08-Rockfont"
+    arm926ejscc
+    ;;
+
+   62|sansaclipplus)
+    target_id=66
+    modelname="sansaclipplus"
+    target="SANSA_CLIPPLUS"
+    memory=8
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$bmp2rb_mono"
+    tool="$rootdir/tools/scramble -add=cli+"
+    output="rockbox.sansa"
+    bootoutput="bootloader-clipplus.sansa"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="as3525"
+    t_model="sansa-clipplus"
+    sysfont="08-Rockfont"
+    arm926ejscc
+    ;;
+
+   63|sansafuzev2)
+    target_id=68
+    modelname="sansafuzev2"
+    target="SANSA_FUZEV2"
+    memory=8 # not sure
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 5"
+    tool="$rootdir/tools/scramble -add=fuz2"
+    output="rockbox.sansa"
+    bootoutput="bootloader-fuzev2.sansa"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="as3525"
+    t_model="sansa-fuzev2"
+    arm926ejscc
+    ;;
+
+   64|sansafuzeplus)
+    target_id=80
+    modelname="sansafuzeplus"
+    target="SANSA_FUZEPLUS"
+    memory=64
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="$rootdir/tools/scramble -add=fuz+"
+    output="rockbox.sansa"
+    bootoutput="bootloader-fuzeplus.sansa"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="imx233"
+    t_model="sansa-fuzeplus"
+    arm926ejscc
+    ;;
+
+   65|sansaclipzip)
+    target_id=68
+    modelname="sansaclipzip"
+    target="SANSA_CLIPZIP"
+    memory=8 # not sure
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="$rootdir/tools/scramble -add=clzp"
+    output="rockbox.sansa"
+    bootoutput="bootloader-clipzip.sansa"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="as3525"
+    t_model="sansa-clipzip"
+    arm926ejscc
+    ;;
+
+   66|sansaconnect)
+    target_id=81
+    modelname="sansaconnect"
+    target="SANSA_CONNECT"
+    memory=64
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="$rootdir/tools/scramble -add=conn"
+    output="rockbox.sansa"
+    bootoutput="bootloader-connect.sansa"
+    appextra="recorder:gui"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="tms320dm320"
+    t_model="sansa-connect"
+    arm926ejscc
+    ;;
+
+   70|mrobe500)
+    target_id=36
+    modelname="mrobe500"
+    target="MROBE_500"
+    memory=64 # always
+    arm926ejscc
+    tool="$rootdir/tools/scramble -add=m500"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 8"
+    bmp2rb_remotemono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_remotenative="$rootdir/tools/bmp2rb -f 0"
+    output="rockbox.mrobe500"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset=$gigabeatbitmaptools
+    boottool="cp "
+    bootoutput="rockbox.mrboot"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="tms320dm320"
+    t_model="mrobe-500"
+    ;;
+
+   71|mrobe100)
+    target_id=33
+    modelname="mrobe100"
+    target="MROBE_100"
+    memory=32 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -mi4v2 -model=m100 -type=RBOS"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_remotemono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_remotenative="$rootdir/tools/bmp2rb -f 0"
+    output="rockbox.mi4"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    boottool="$rootdir/tools/scramble -mi4v2 -model=m100 -type=RBBL"
+    bootoutput="pp5020.mi4"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$scramblebitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="olympus"
+    t_model="mrobe-100"
+    ;;
+
+   80|ipodnano3g)
+    target_id=117
+    modelname="ipodnano3g"
+    blonly="yes"
+    target="IPOD_NANO3G"
+    memory=32 # always
+    arm926ejscc
+    tool="$rootdir/tools/scramble -add=nn3g"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.ipod"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    bootoutput="bootloader-$modelname.ipod"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$ipodbitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="s5l8702"
+    t_model="ipodnano3g"
+    ;;
+
+   81|ipodnano4g)
+    target_id=118
+    modelname="ipodnano4g"
+    blonly="yes"
+    target="IPOD_NANO4G"
+    memory=32 # always
+    arm1176jzscc
+    tool="$rootdir/tools/scramble -add=nn4g"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.ipod"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    bootoutput="bootloader-$modelname.ipod"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$ipodbitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="s5l8702"
+    t_model="ipodnano4g"
+    ;;
+
+   89|creativezenxfistyle)
+    target_id=94
+    modelname="creativezenxfistyle"
+    target="CREATIVE_ZENXFISTYLE"
+    memory=64
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="$rootdir/tools/scramble -add=zxfs"
+    output="rockbox.creative"
+    bootoutput="bootloader-zenxfistyle.creative"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="imx233"
+    t_model="creative-zen"
+    arm926ejscc
+    ;;
+
+   93|creativezenxfi2)
+    target_id=80
+    modelname="creativezenxfi2"
+    target="CREATIVE_ZENXFI2"
+    memory=64
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="$rootdir/tools/scramble -add=zxf2"
+    output="rockbox.creative"
+    bootoutput="bootloader-zenxfi2.creative"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="imx233"
+    t_model="creative-zenxfi2"
+    arm926ejscc
+    ;;
+
+   94|creativezenxfi3)
+    target_id=81
+    modelname="creativezenxfi3"
+    target="CREATIVE_ZENXFI3"
+    memory=64
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="$rootdir/tools/scramble -add=zxf3"
+    output="rockbox.creative"
+    bootoutput="bootloader-zenxfi3.creative"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="imx233"
+    t_model="creative-zenxfi3"
+    arm926ejscc
+    ;;
+
+   95|creativezenv)
+    target_id=92
+    modelname="creativezenv"
+    target="CREATIVE_ZENV"
+    memory=32
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="$rootdir/tools/scramble -add=zenv"
+    output="rockbox.creative"
+    bootoutput="bootloader-zenv.creative"
+    appextra="radio:gui:recorder"
+    plugins=""
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="imx233"
+    t_model="creative-zen"
+    arm926ejscc
+    ;;
+
+   96|creativezenxfi)
+    target_id=86
+    modelname="creativezenxfi"
+    target="CREATIVE_ZENXFI"
+    memory=64
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 9"
+    tool="$rootdir/tools/scramble -add=zxfi"
+    output="rockbox.creative"
+    bootoutput="bootloader-zenxfi.creative"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="imx233"
+    t_model="creative-zen"
+    arm926ejscc
+    ;;
+
+   97|creativezenmozaic)
+    target_id=87
+    modelname="creativezenmozaic"
+    target="CREATIVE_ZENMOZAIC"
+    memory=32
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="$rootdir/tools/scramble -add=zmoz"
+    output="rockbox.creative"
+    bootoutput="bootloader-zenmozaic.creative"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="imx233"
+    t_model="creative-zen"
+    arm926ejscc
+    ;;
+
+  98|creativezen)
+    target_id=90
+    modelname="creativezen"
+    target="CREATIVE_ZEN"
+    memory=32
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 9"
+    tool="$rootdir/tools/scramble -add=zen"
+    output="rockbox.creative"
+    bootoutput="bootloader-zen.creative"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="imx233"
+    t_model="creative-zen"
+    arm926ejscc
+    ;;
+
+   100|gogearsa9200)
+    target_id=41
+    modelname="gogearsa9200"
+    target="PHILIPS_SA9200"
+    memory=32 # supposedly
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -mi4v3 -model=9200 -type=RBOS"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.mi4"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    boottool="$rootdir/tools/scramble -mi4v3 -model=9200 -type=RBBL"
+    bootoutput="FWImage.ebn"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$scramblebitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="philips"
+    t_model="sa9200"
+    ;;
+
+   101|gogearhdd1630)
+    target_id=43
+    modelname="gogearhdd1630"
+    target="PHILIPS_HDD1630"
+    memory=32 # supposedly
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -mi4v3 -model=1630 -type=RBOS"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.mi4"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    boottool="$rootdir/tools/scramble -mi4v3 -model=1630 -type=RBBL"
+    bootoutput="FWImage.ebn"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$scramblebitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="philips"
+    t_model="hdd1630"
+    ;;
+
+   102|gogearhdd6330)
+    target_id=65
+    modelname="gogearhdd6330"
+    target="PHILIPS_HDD6330"
+    memory=64 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -mi4v3 -model=6330 -type=RBOS"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 5"
+    output="rockbox.mi4"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    boottool="$rootdir/tools/scramble -mi4v3 -model=6330 -type=RBBL"
+    bootoutput="FWImage.ebn"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$scramblebitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="philips"
+    t_model="hdd6330"
+    ;;
+
+   120|ondavx747)
+    target_id=45
+    modelname="ondavx747"
+    target="ONDA_VX747"
+    memory=16
+    mipselcc
+    tool="$rootdir/tools/scramble -add=x747"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.vx747"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset=$genericbitmaptools
+    boottool="$rootdir/tools/scramble -ccpmp"
+    bootoutput="ccpmp.bin"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="mips"
+    t_manufacturer="ingenic_jz47xx"
+    t_model="onda_vx747"
+    ;;
+
+   121|ondavx767)
+    target_id=64
+    modelname="ondavx767"
+    target="ONDA_VX767"
+    memory=16 #FIXME
+    mipselcc
+    tool="cp"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.vx767"
+    appextra="recorder:gui:radio"
+    plugins="" #FIXME
+    toolset=$genericbitmaptools
+    boottool="$rootdir/tools/scramble -ccpmp"
+    bootoutput="ccpmp.bin"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="mips"
+    t_manufacturer="ingenic_jz47xx"
+    t_model="onda_vx767"
+    ;;
+
+   122|ondavx747p)
+    target_id=54
+    modelname="ondavx747p"
+    target="ONDA_VX747P"
+    memory=16
+    mipselcc
+    tool="$rootdir/tools/scramble -add=747p"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.vx747p"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset=$genericbitmaptools
+    boottool="$rootdir/tools/scramble -ccpmp"
+    bootoutput="ccpmp.bin"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="mips"
+    t_manufacturer="ingenic_jz47xx"
+    t_model="onda_vx747"
+    ;;
+
+   123|ondavx777)
+    target_id=61
+    modelname="ondavx777"
+    target="ONDA_VX777"
+    memory=16
+    mipselcc
+    tool="$rootdir/tools/scramble -add=x777"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.vx777"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    toolset=$genericbitmaptools
+    boottool="$rootdir/tools/scramble -ccpmp"
+    bootoutput="ccpmp.bin"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="mips"
+    t_manufacturer="ingenic_jz47xx"
+    t_model="onda_vx747"
+    ;;
+
+   140|samsungyh820)
+    target_id=57
+    modelname="samsungyh820"
+    target="SAMSUNG_YH820"
+    memory=32 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -mi4v2 -model=y820 -type=RBOS"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.mi4"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    boottool="$rootdir/tools/scramble -mi4v2 -model=y820 -type=RBBL"
+    bootoutput="FW_YH820.mi4"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$scramblebitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="samsung"
+    t_model="yh820"
+    ;;
+
+   141|samsungyh920)
+    target_id=58
+    modelname="samsungyh920"
+    target="SAMSUNG_YH920"
+    memory=32 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -mi4v2 -model=y920 -type=RBOS"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 2"
+    output="rockbox.mi4"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    boottool="$rootdir/tools/scramble -mi4v2 -model=y920 -type=RBBL"
+    bootoutput="PP5020.mi4"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$scramblebitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="samsung"
+    t_model="yh920"
+    ;;
+
+   142|samsungyh925)
+    target_id=59
+    modelname="samsungyh925"
+    target="SAMSUNG_YH925"
+    memory=32 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -mi4v2 -model=y925 -type=RBOS"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.mi4"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    boottool="$rootdir/tools/scramble -mi4v2 -model=y925 -type=RBBL"
+    bootoutput="FW_YH925.mi4"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$scramblebitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="samsung"
+    t_model="yh925"
+    ;;
+
+   160|vibe500)
+    target_id=67
+    modelname="vibe500"
+    target="PBELL_VIBE500"
+    memory=32 # always
+    arm7tdmicc
+    tool="$rootdir/tools/scramble -mi4v3 -model=v500 -type=RBOS"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 5"
+    output="rockbox.mi4"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    boottool="$rootdir/tools/scramble -mi4v3 -model=v500 -type=RBBL"
+    bootoutput="jukebox.mi4"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset=$scramblebitmaptools
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_soc="pp"
+    t_manufacturer="pbell"
+    t_model="vibe500"
+    ;;
+
+   170|mpiohd200)
+    target_id=69
+    modelname="mpiohd200"
+    target="MPIO_HD200"
+    memory=16 # always
+    coldfirecc
+    tool="$rootdir/tools/scramble -add=hd20"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 7"
+    output="rockbox.mpio"
+    bootoutput="bootloader.mpio"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="coldfire"
+    t_manufacturer="mpio"
+    t_model="hd200"
+    ;;
+
+   171|mpiohd300)
+    target_id=70
+    modelname="mpiohd300"
+    target="MPIO_HD300"
+    memory=16 # always
+    coldfirecc
+    tool="$rootdir/tools/scramble -add=hd30"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 2"
+    output="rockbox.mpio"
+    bootoutput="bootloader.mpio"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="coldfire"
+    t_manufacturer="mpio"
+    t_model="hd300"
+    ;;
+
+   180|rk27generic)
+    target_id=78
+    modelname="rk27generic"
+    target="RK27_GENERIC"
+    memory=16 # always
+    arm7ejscc
+    tool="$rootdir/tools/scramble -rkw -modelnum=73"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.rkw"
+    bootoutput="bootloader.rkw"
+    appextra="recorder:gui:radio"
+    plugins=""
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="rk27xx"
+    t_model="rk27generic"
+    ;;
+
+   190|hifimanhm60x)
+    target_id=79
+    modelname="hifimanhm60x"
+    target="HM60X"
+    memory=16
+    arm7ejscc
+    tool="$rootdir/tools/scramble -rkw -modelnum=79"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.rkw"
+    bootoutput="bootloader.rkw"
+    appextra="recorder:gui"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="rk27xx"
+    t_model="hm60x"
+    ;;
+
+   191|hifimanhm801)
+    target_id=82
+    modelname="hifimanhm801"
+    target="HM801"
+    memory=16
+    arm7ejscc
+    tool="$rootdir/tools/scramble -rkw -modelnum=82"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.rkw"
+    bootoutput="bootloader.rkw"
+    appextra="recorder:gui"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="rk27xx"
+    t_model="hm801"
+    ;;
+
+   200|sdlapp)
+    application="yes"
+    target_id=73
+    modelname="sdlapp"
+    target="SDLAPP"
+    app_set_paths
+    app_set_lcd_size
+    memory=8
+    uname=`uname`
+    simcc "sdl-app"
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 9"
+    output="rockbox"
+    bootoutput="rockbox"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="hosted"
+    t_manufacturer="sdl"
+    t_model="app"
+    ;;
+
+   201|android)
+    application="yes"
+    target_id=74
+    modelname="android"
+    target="ANDROID"
+    app_type="android"
+    app_set_lcd_size
+    sharedir="/data/data/org.rockbox/app_rockbox/rockbox"
+    bindir="/data/data/org.rockbox/lib"
+    libdir="/data/data/org.rockbox/app_rockbox"
+    memory=8
+    uname=`uname`
+    androidcc 19 armeabi "-march=armv7-a -mtune=cortex-a9 -mfloat-abi=softfp"
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="librockbox.so"
+    bootoutput="librockbox.so"
+    appextra="recorder:gui:radio:hosted/android"
+    plugins="yes"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="hosted"
+    t_manufacturer="android"
+    t_model="app"
+    ;;
+
+   144|samsungypr0)
+    application="yes"
+    target_id=78
+    modelname="samsungypr0"
+    target="SAMSUNG_YPR0"
+    memory=24
+    uname=`uname`
+    ypr0cc
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 9"
+    output="rockbox"
+    bootoutput="rockbox"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="hosted"
+    t_manufacturer="samsungypr"
+    t_model="ypr0"
+    ;;
+
+   202|androidmips)
+    application="yes"
+    target_id=74
+    modelname="androidmips"
+    target="ANDROID"
+    app_type="android"
+    app_set_lcd_size
+    sharedir="/data/data/org.rockbox/app_rockbox/rockbox"
+    bindir="/data/data/org.rockbox/lib"
+    libdir="/data/data/org.rockbox/app_rockbox"
+    memory=8
+    uname=`uname`
+    androidcc 19 mips
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="librockbox.so"
+    bootoutput="librockbox.so"
+    appextra="recorder:gui:radio:hosted/android"
+    plugins="yes"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="hosted"
+    t_manufacturer="android"
+    t_model="app"
+    ;;
+
+   203|androidx86)
+    application="yes"
+    target_id=74
+    modelname="androidx86"
+    target="ANDROID"
+    app_type="android"
+    app_set_lcd_size
+    sharedir="/data/data/org.rockbox/app_rockbox/rockbox"
+    bindir="/data/data/org.rockbox/lib"
+    libdir="/data/data/org.rockbox/app_rockbox"
+    memory=8
+    uname=`uname`
+    androidcc 19 x86
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="librockbox.so"
+    bootoutput="librockbox.so"
+    appextra="recorder:gui:radio:hosted/android"
+    plugins="yes"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="hosted"
+    t_manufacturer="android"
+    t_model="app"
+    ;;
+
+   145|samsungypr1)
+    application="yes"
+    target_id=93
+    modelname="samsungypr1"
+    target="SAMSUNG_YPR1"
+    memory=24
+    uname=`uname`
+    # Linux environment and CPU are the same as for R0, use the same gcc options
+    ypr0cc
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 9"
+    output="rockbox"
+    bootoutput="rockbox"
+    appextra="recorder:gui:radio"
+    plugins="yes"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="hosted"
+    t_manufacturer="samsungypr"
+    t_model="ypr1"
+    ;;
+
+   209|rgnano)
+    target_id=121
+    application="yes"
+    modelname="rgnano"
+    app_type="sdl-app"
+    target="RG_NANO"
+    memory=32
+    uname=`uname`
+    rgnanocc
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox"
+    bootoutput="rockbox"
+    appextra="recorder:gui"
+    plugins="yes"
+    t_cpu="hosted"
+    t_manufacturer="anbernic"
+    t_model="rgnano"
+    ;;
+
+   210|hifietma9)
+    target_id=83
+    modelname="hifietma9"
+    target="MA9"
+    memory=16
+    arm7ejscc
+    tool="$rootdir/tools/scramble -rkw -modelnum=83"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.rkw"
+    bootoutput="bootloader.rkw"
+    appextra="recorder:gui"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="rk27xx"
+    t_model="ma"
+    ;;
+
+   211|hifietma9c)
+    target_id=84
+    modelname="hifietma9c"
+    target="MA9C"
+    memory=16
+    arm7ejscc
+    tool="$rootdir/tools/scramble -rkw -modelnum=84"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.rkw"
+    bootoutput="bootloader.rkw"
+    appextra="recorder:gui"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="rk27xx"
+    t_model="ma"
+    ;;
+
+   212|hifietma8)
+    target_id=85
+    modelname="hifietma8"
+    target="MA8"
+    memory=16
+    arm7ejscc
+    tool="$rootdir/tools/scramble -rkw -modelnum=85"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.rkw"
+    bootoutput="bootloader.rkw"
+    appextra="recorder:gui"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="rk27xx"
+    t_model="ma"
+    ;;
+
+   213|hifietma8c)
+    target_id=91
+    modelname="hifietma8c"
+    target="MA8C"
+    memory=16
+    arm7ejscc
+    tool="$rootdir/tools/scramble -rkw -modelnum=91"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.rkw"
+    bootoutput="bootloader.rkw"
+    appextra="recorder:gui"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="rk27xx"
+    t_model="ma"
+    ;;
+
+   219|sonynwze350)
+    application="yes"
+    target_id=105
+    modelname="sonynwze350"
+    target="SONY_NWZE350"
+    memory=16
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="cp"
+    output="rockbox.sony"
+    boottool="$rootdir/tools/scramble -add=e350"
+    bootoutput="bootloader-nwze350.sony"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$genericbitmaptools
+    t_cpu="hosted"
+    t_manufacturer="sonynwz"
+    t_model="nwze350"
+    uname=`uname`
+    sonynwzcc
+    ;;
+
+   220|sonynwze370)
+    target_id=88
+    modelname="sonynwze370"
+    target="SONY_NWZE370"
+    memory=32
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="$rootdir/tools/scramble -add=e370"
+    output="rockbox.sony"
+    bootoutput="bootloader-nwze370.sony"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="imx233"
+    t_model="sony-nwz"
+    arm926ejscc
+    ;;
+
+   221|sonynwze360)
+    target_id=89
+    modelname="sonynwze360"
+    target="SONY_NWZE360"
+    memory=32
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="$rootdir/tools/scramble -add=e360"
+    output="rockbox.sony"
+    bootoutput="bootloader-nwze360.sony"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$scramblebitmaptools
+    t_cpu="arm"
+    t_manufacturer="imx233"
+    t_model="sony-nwz"
+    arm926ejscc
+    ;;
+
+   222|sonynwze450)
+    application="yes"
+    target_id=96
+    modelname="sonynwze450"
+    target="SONY_NWZE450"
+    memory=16
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="cp"
+    output="rockbox.sony"
+    boottool="$rootdir/tools/scramble -add=e450"
+    bootoutput="bootloader-nwze450.sony"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$genericbitmaptools
+    t_cpu="hosted"
+    t_manufacturer="sonynwz"
+    t_model="nwze450"
+    uname=`uname`
+    sonynwzcc
+    ;;
+
+   223|sonynwze460)
+    application="yes"
+    target_id=97
+    modelname="sonynwze460"
+    target="SONY_NWZE460"
+    memory=16
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="cp"
+    output="rockbox.sony"
+    boottool="$rootdir/tools/scramble -add=e460"
+    bootoutput="bootloader-nwze460.sony"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$genericbitmaptools
+    t_cpu="hosted"
+    t_manufacturer="sonynwz"
+    t_model="nwze460"
+    uname=`uname`
+    sonynwzcc
+    ;;
+
+   224|sonynwze470)
+    application="yes"
+    target_id=100
+    modelname="sonynwze470"
+    target="SONY_NWZE470"
+    memory=16
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="cp"
+    output="rockbox.sony"
+    boottool="$rootdir/tools/scramble -add=e470"
+    bootoutput="bootloader-nwze470.sony"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$genericbitmaptools
+    t_cpu="hosted"
+    t_manufacturer="sonynwz"
+    t_model="nwze470"
+    uname=`uname`
+    sonynwzcc
+    ;;
+
+   225|sonynwze580)
+    application="yes"
+    target_id=98
+    modelname="sonynwze580"
+    target="SONY_NWZE580"
+    memory=16
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="cp"
+    output="rockbox.sony"
+    boottool="$rootdir/tools/scramble -add=e580"
+    bootoutput="bootloader-nwze580.sony"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$genericbitmaptools
+    t_cpu="hosted"
+    t_manufacturer="sonynwz"
+    t_model="nwze580"
+    uname=`uname`
+    sonynwzcc
+    ;;
+
+   226|sonynwza10)
+    application="yes"
+    target_id=101
+    modelname="sonynwza10"
+    target="SONY_NWZA10"
+    memory=16
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="cp"
+    output="rockbox.sony"
+    boottool="$rootdir/tools/scramble -add=a10"
+    bootoutput="bootloader-nwza10.sony"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$genericbitmaptools
+    t_cpu="hosted"
+    t_manufacturer="sonynwz"
+    t_model="nwza10"
+    uname=`uname`
+    sonynwzcc
+    ;;
+
+   227|sonynwa20)
+    application="yes"
+    target_id=102
+    modelname="sonynwa20"
+    target="SONY_NWA20"
+    memory=16
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="cp"
+    output="rockbox.sony"
+    boottool="$rootdir/tools/scramble -add=a20"
+    bootoutput="bootloader-nwa20.sony"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$genericbitmaptools
+    t_cpu="hosted"
+    t_manufacturer="sonynwz"
+    t_model="nwa20"
+    uname=`uname`
+    sonynwzcc
+    ;;
+
+   228|sonynwza860)
+    application="yes"
+    target_id=103
+    modelname="sonynwza860"
+    target="SONY_NWZA860"
+    memory=16
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="cp"
+    output="rockbox.sony"
+    boottool="$rootdir/tools/scramble -add=a860"
+    bootoutput="bootloader-nwza860.sony"
+    appextra="gui:recorder:radio"
+    plugins=""
+    toolset=$genericbitmaptools
+    t_cpu="hosted"
+    t_manufacturer="sonynwz"
+    t_model="nwza860"
+    uname=`uname`
+    sonynwzcc
+    ;;
+
+   229|sonynwzs750)
+    application="yes"
+    target_id=104
+    modelname="sonynwzs750"
+    target="SONY_NWZS750"
+    memory=16
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    tool="cp"
+    output="rockbox.sony"
+    boottool="$rootdir/tools/scramble -add=s750"
+    bootoutput="bootloader-nwzs750.sony"
+    appextra="gui:recorder:radio"
+    plugins="yes"
+    toolset=$genericbitmaptools
+    t_cpu="hosted"
+    t_manufacturer="sonynwz"
+    t_model="nwzs750"
+    uname=`uname`
+    sonynwzcc
+    ;;
+
+   230|ihifi760)
+    target_id=92
+    modelname="ihifi760"
+    target="IHIFI760"
+    memory=16
+    arm7ejscc
+    tool="$rootdir/tools/scramble -rkw -modelnum=92"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.rkw"
+    bootoutput="bootloader.rkw"
+    appextra="recorder:gui"
+    plugins=""
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="rk27xx"
+    t_model="ihifi"
+    ;;
+
+   234|ihifi960)
+    target_id=93
+    modelname="ihifi960"
+    target="IHIFI960"
+    memory=16
+    arm7ejscc
+    tool="$rootdir/tools/scramble -rkw -modelnum=93"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.rkw"
+    bootoutput="bootloader.rkw"
+    appextra="recorder:gui"
+    plugins=""
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="rk27xx"
+    t_model="ihifi"
+    ;;
+
+   250|ibassodx50)
+    application="yes"
+    target_id=94
+    modelname="ibassodx50"
+    target="DX50"
+    app_type="android_ndk"
+    lcd_orientation="landscape"
+    # Actually 408260kB
+    memory=192
+    uname=`uname`
+    androidndkcc 16 armeabi "-mcpu=cortex-a9 -mfpu=neon-fp16 -mfloat-abi=softfp"
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox"
+    bootoutput="rockbox"
+    appextra="recorder:gui:hosted"
+    plugins="yes"
+    tinyalsa="yes"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="hosted"
+    t_manufacturer="ibasso"
+    t_model="dx50"
+    ;;
+
+   251|ibassodx90)
+    application="yes"
+    target_id=95
+    modelname="ibassodx90"
+    target="DX90"
+    app_type="android_ndk"
+    lcd_orientation="landscape"
+    memory=192
+    uname=`uname`
+    androidndkcc 16 armeabi "-mcpu=cortex-a9 -mfpu=neon-fp16 -mfloat-abi=softfp"
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox"
+    bootoutput="rockbox"
+    appextra="recorder:gui:hosted"
+    plugins="yes"
+    tinyalsa="yes"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="hosted"
+    t_manufacturer="ibasso"
+    t_model="dx90"
+    ;;
+
+   240|agptekrocker)
+    application="yes"
+    app_type="hibyos"
+    target_id=97
+    modelname="agptekrocker"
+    target="AGPTEK_ROCKER"
+    memory=8
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 10"
+    output="rockbox.rocker"
+    bootoutput="bootloader.rocker"
+    appextra="recorder:gui:hosted"
+    plugins="yes"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="hosted"
+    t_manufacturer="agptek"
+    t_model="rocker"
+    mipsellinuxcc
+    ;;
+
+   241|xduoox3)
+    target_id=106
+    modelname="xduoox3"
+    target="XDUOO_X3"
+    memory=64
+    mipselcc
+    tool="$rootdir/tools/scramble -add=xdx3"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$bmp2rb_mono"
+    output="rockbox.x3"
+    appextra="recorder:gui"
+    plugins="yes"
+    toolset=$genericbitmaptools
+    boottool="cp"
+    bootoutput="bootloader-x3.bin"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="mips"
+    t_manufacturer="ingenic_jz47xx"
+    t_model="xduoo_x3"
+    sysfont="08-Rockfont"
+    ;;
+
+   242|xduoox3ii)
+    target_id=110
+    application=yes
+    app_type="hibyos"
+    modelname="xduoox3ii"
+    target="XDUOO_X3II"
+    memory=8
+    mipsellinuxcc
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 10"
+    output="rockbox.x3ii"
+    bootoutput="bootloader.x3ii"
+    appextra="recorder:gui:hosted"
+    plugins="yes"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="hosted"
+    t_manufacturer="xduoo"
+    t_model="xduoo_x3ii"
+    sysfontbl="16-Terminus"
+    ;;
+
+   243|xduoox20)
+    target_id=111
+    application=yes
+    app_type="hibyos"
+    modelname="xduoox20"
+    target="XDUOO_X20"
+    memory=8
+    mipsellinuxcc
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 10"
+    output="rockbox.x20"
+    bootoutput="bootloader.x20"
+    appextra="recorder:gui:hosted"
+    plugins="yes"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="hosted"
+    t_manufacturer="xduoo"
+    t_model="xduoo_x20"
+    sysfontbl="16-Terminus"
+    ;;
+
+   244|fiiom3klinux)
+    application="yes"
+    app_type="fiio"
+    target_id=112
+    modelname="fiiom3klinux"
+    target="FIIO_M3K_LINUX"
+    memory=16 # XXX Can probably go over 32?
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.m3k"
+    bootoutput="bootloader.m3k"
+    appextra="recorder:gui:hosted"
+    plugins="yes"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="hosted"
+    t_manufacturer="fiio"
+    t_model="m3k"
+    mipsellinuxcc
+    sysfontbl="16-Terminus"
+    ;;
+
+   245|aigoerosq|erosq)
+    target_id=113
+    application=yes
+    app_type="hibyos"
+    modelname="aigoerosq"
+    target="EROS_Q"
+    memory=8
+    mipsellinuxcc
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 10"
+    output="rockbox.erosq"
+    bootoutput="bootloader.erosq"
+    appextra="recorder:gui:hosted"
+    plugins="yes"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="hosted"
+    t_manufacturer="aigo"
+    t_model="erosq"
+    sysfontbl="16-Terminus"
+    ;;
+
+   246|fiiom3k)
+    target_id=114
+    modelname="fiiom3k"
+    target="FIIO_M3K"
+    memory=64
+    mipsr2elcc
+    appextra="recorder:gui"
+    plugins="yes"
+    tool="$rootdir/tools/scramble -add=fiiom3k "
+    boottool="$rootdir/tools/mkspl-x1000 -type=nand -ppb=2 -bpp=2 "
+    output="rockbox.m3k"
+    bootoutput="bootloader.m3k"
+    sysfontbl="16-Terminus"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$x1000tools"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="mips"
+    t_manufacturer="ingenic_x1000"
+    t_soc="ingenic"
+    t_model="fiiom3k"
+    ;;
+
+   247|erosqnative)
+    target_id=116
+    modelname="erosqnative"
+    target="EROS_QN"
+    memory=32
+    mipsr2elcc
+    appextra="recorder:gui"
+    plugins="yes"
+    tool="$rootdir/tools/scramble -add=erosqnative "
+    boottool="$rootdir/tools/mkspl-x1000 -type=nand -ppb=2 -bpp=2 "
+    output="rockbox.erosq"
+    bootoutput="bootloader.erosq"
+    sysfontbl="16-Terminus"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$x1000tools"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="mips"
+    t_manufacturer="ingenic_x1000"
+    t_soc="ingenic"
+    t_model="erosqnative"
+    # player version, for bootloader usage
+    # versions 1 and 2 both use 1
+    extradefines="$extradefines -DEROSQN_VER=1"
+    ;;
+
+   248|erosqnative_v3)
+    target_id=116
+    modelname="erosqnative_v3"
+    blonly="yes"
+    target="EROS_QN"
+    memory=32
+    mipsr2elcc
+    appextra="recorder:gui"
+    plugins="yes"
+    tool="$rootdir/tools/scramble -add=erosqnative "
+    boottool="$rootdir/tools/mkspl-x1000 -type=nand -ppb=2 -bpp=2 "
+    output="rockbox.erosq"
+    bootoutput="bootloader.erosq"
+    sysfontbl="16-Terminus"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$x1000tools"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="mips"
+    t_manufacturer="ingenic_x1000"
+    t_soc="ingenic"
+    t_model="erosqnative"
+    # player version, for bootloader usage
+    # version 3
+    extradefines="$extradefines -DEROSQN_VER=3"
+    bootloader_only=1
+    ;;
+
+    249|erosqnative_v4)
+    target_id=116
+    modelname="erosqnative_v4"
+    blonly="yes"
+    target="EROS_QN"
+    memory=32
+    mipsr2elcc
+    appextra="recorder:gui"
+    plugins="yes"
+    tool="$rootdir/tools/scramble -add=erosqnative "
+    boottool="$rootdir/tools/mkspl-x1000 -type=nand -ppb=2 -bpp=2 "
+    output="rockbox.erosq"
+    bootoutput="bootloader.erosq"
+    sysfontbl="16-Terminus"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$x1000tools"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="mips"
+    t_manufacturer="ingenic_x1000"
+    t_soc="ingenic"
+    t_model="erosqnative"
+    # player version, for bootloader usage
+    # version 4
+    extradefines="$extradefines -DEROSQN_VER=4"
+    bootloader_only=1
+    ;;
+
+   232|ihifi770c)
+    target_id=107
+    modelname="ihifi770c"
+    target="IHIFI770C"
+    memory=16
+    arm7ejscc
+    tool="$rootdir/tools/scramble -rkw -modelnum=97"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.rkw"
+    bootoutput="bootloader.rkw"
+    appextra="recorder:gui"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="rk27xx"
+    t_model="ihifi2"
+    ;;
+
+   231|ihifi770)
+    target_id=108
+    modelname="ihifi770"
+    target="IHIFI770"
+    memory=16
+    arm7ejscc
+    tool="$rootdir/tools/scramble -rkw -modelnum=98"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.rkw"
+    bootoutput="bootloader.rkw"
+    appextra="recorder:gui"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="rk27xx"
+    t_model="ihifi2"
+    ;;
+
+   233|ihifi800)
+    target_id=109
+    modelname="ihifi800"
+    target="IHIFI800"
+    memory=16
+    arm7ejscc
+    tool="$rootdir/tools/scramble -rkw -modelnum=99"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.rkw"
+    bootoutput="bootloader.rkw"
+    appextra="recorder:gui"
+    plugins="yes"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="rk27xx"
+    t_model="ihifi2"
+    ;;
+
+   260|shanlingq1)
+    target_id=115
+    modelname="shanlingq1"
+    target="SHANLING_Q1"
+    memory=64
+    mipsr2elcc
+    appextra="recorder:gui"
+    plugins="yes"
+    tool="$rootdir/tools/scramble -add=shq1 "
+    boottool="$rootdir/tools/mkspl-x1000 -type=nand -ppb=2 -bpp=2 "
+    output="rockbox.q1"
+    bootoutput="bootloader.q1"
+    sysfontbl="16-Terminus"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$x1000tools"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="mips"
+    t_manufacturer="ingenic_x1000"
+    t_soc="ingenic"
+    t_model="shanlingq1"
+    ;;
+
+    270|echor1)
+    target_id=119
+    modelname="echor1"
+    target="ECHO_R1"
+    memory=32
+    armcortexm7cc
+    appextra="recorder:gui"
+    plugins="yes"
+    tool="cp "
+    boottool="cp "
+    output="rockbox.echo"
+    bootoutput="bootloader.echo"
+    sysfontbl="16-Terminus"
+    sysfont="14-Rockbox-Mix"
+    # toolset is the tools within the tools directory that we build for
+    # this particular target.
+    toolset="$genericbitmaptools scramble uclpack reggen"
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="arm"
+    t_manufacturer="stm32"
+    t_model="echoplayer"
+    # generate debug symbols by default; these will be present in the
+    # initial '.elf' file but will be stripped from the target binary.
+    GCCOPTS="-g $GCCOPTS"
+    # set page size to 4k to guarantee reasonable on-disk alignment,
+    # which improves disk read speed; on ARM binutils defaults to 64k
+    # which adds quite a bit of unnecessary padding.
+    GCCOPTS="-Wl,-z,max-page-size=4096 $GCCOPTS"
+    USE_ELF="yes"
+    ;;
+
+    280|surfansf28)
+    target_id=120
+    application=yes
+    app_type="hibyos"
+    modelname="surfansf28"
+    target="SURFANS_F28"
+    memory=32 # 64 total!
+    mipsellinuxcc
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 10"
+    output="rockbox.f28"
+    bootoutput="bootloader.f28"
+    appextra="recorder:gui:hosted"
+    plugins="no"
+    # architecture, manufacturer and model for the target-tree build
+    t_cpu="hosted"
+    t_manufacturer="surfans"
+    t_model="f28"
+    sysfontbl="16-Terminus"
+    ;;
+
+    290|3ds)
+    target_id=122
+    application="yes"
+    modelname="3ds"
+    app_type="3ds-homebrew"
+    target="N3DS"
+    memory=16
+    uname=`uname`
+    devkitarmcc
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.elf"
+    bootoutput="rockbox"
+    appextra="recorder:gui"
+    plugins="yes"
+    t_cpu="hosted"
+    t_manufacturer="game_console"
+    t_model="3ds"
+    ;;
+
+    300|hibyr3proii)
+    target_id=123
+    application=yes
+    app_type="hibyos"
+    modelname="hibyr3proii"
+    target="HIBY_R3PROII"
+    memory=16 # The device has 64mb but let's make sure it still boots with things in the background
+    mipsellinuxcc
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.r3proii"
+    bootoutput="bootloader.r3proii"
+    appextra="recorder:gui:hosted"
+    plugins="yes"
+    # architecture, manufacturer and model for the target-tree build
+    # These align with
+    t_cpu="hosted"
+    t_manufacturer="hiby"
+    t_model="r3proii"
+    sysfontbl="24-Terminus"
+    sysfont="20-Terminus"
+    ;;
+
+    301|hibyr1)
+    target_id=124
+    application=yes
+    app_type="hibyos"
+    modelname="hibyr1"
+    target="HIBY_R1"
+    memory=16 # The device has 64mb but let's make sure it still boots with things in the background
+    mipsellinuxcc
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.r1"
+    bootoutput="bootloader.r1"
+    appextra="recorder:gui:hosted"
+    plugins="yes"
+    # architecture, manufacturer and model for the target-tree build
+    # These align with
+    t_cpu="hosted"
+    t_manufacturer="hiby"
+    t_model="r1"
+    sysfontbl="24-Terminus"
+    sysfont="20-Terminus"
+    ;;
+
+    302|hidizsap80max)
+    target_id=125
+    application=yes
+    app_type="hibyos"
+    modelname="hidizsap80max"
+    target="HIDIZS_AP80MAX"
+    memory=16 # The device has 64mb but let's make sure it still boots with things in the background
+    mipsellinuxcc
+    tool="cp "
+    boottool="cp "
+    bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
+    bmp2rb_native="$rootdir/tools/bmp2rb -f 4"
+    output="rockbox.ap80max"
+    bootoutput="bootloader.ap80max"
+    appextra="recorder:gui:hosted"
+    plugins="yes"
+    # architecture, manufacturer and model for the target-tree build
+    # These align with
+    t_cpu="hosted"
+    t_manufacturer="hiby"
+    t_model="ap80max"
+    sysfontbl="24-Terminus"
+    sysfont="20-Terminus"
+    ;;
+
+
+   *)
+    echo "Please select a supported target platform!"
+    exit 7
+    ;;
+
+  esac
+
+  echo "Platform set to $modelname"
+
+
+#remove start
+############################################################################
+# Amount of memory, for those that can differ. They have $memory unset at
+# this point.
+#
+
+if [ -z "$memory" ]; then
+  case $target_id in
+  15)
+    if [ "$ARG_RAM" ]; then
+      size=$ARG_RAM
+    else
+      echo "Enter size of your RAM (in MB): (Defaults to 32)"
+      size=`input`;
+    fi
+    case $size in
+    60|64)
+      memory="64"
+      ;;
+    *)
+      memory="32"
+      ;;
+    esac
+    ;;
+  *)
+    if [ "$ARG_RAM" ]; then
+      size=$ARG_RAM
+    else
+      echo "Enter size of your RAM (in MB): (Defaults to 2)"
+      size=`input`;
+    fi
+    case $size in
+    8)
+      memory="8"
+      ;;
+    *)
+      memory="2"
+      ;;
+    esac
+    ;;
+  esac
+  echo "Memory size selected: $memory MB"
+  [ "$ARG_TYPE" ] || echo ""
+fi
+#remove end
+
+##################################################################
+# Figure out build "type"
+#
+
+case $modelname in
+  sansae200r|sansae200)
+     gdbstub=", (I)nstaller"
+     ;;
+  sansac200)
+     gdbstub=", (E)raser"
+     ;;
+  sansae200)
+     gdbstub=", (E)raser"
+     ;;
+  *)
+     ;;
+esac
+if [ "$ARG_TYPE" ]; then
+  btype=$ARG_TYPE
+else
+  echo "Build (N)ormal, (A)dvanced, (S)imulator, (B)ootloader, (C)heckWPS, (D)atabase tool, (W)arble codec tool$gdbstub: (Defaults to N)"
+  btype=`input`;
+fi
+
+  case $btype in
+    [Ii])
+      appsdir='$(ROOTDIR)/bootloader'
+      apps="bootloader"
+      extradefines="$extradefines -DBOOTLOADER -DE200R_INSTALLER -ffunction-sections -fdata-sections"
+      bootloader="1"
+      echo "e200R-installer build selected"
+      ;;
+    [Ee])
+      appsdir='$(ROOTDIR)/bootloader'
+      apps="bootloader"
+      extradefines="$extradefines -DBOOTLOADER -DSANSA_PP_ERASE -ffunction-sections -fdata-sections"
+      bootloader="1"
+      echo "sansa eraser build selected"
+      ;;
+    [Bb])
+      do_bootloader
+      echo "Bootloader build selected"
+      ;;
+    [Ss])
+      if [ "$modelname" = "sansae200r" ]; then
+          echo "Do not use the e200R target for simulator builds.  Use e200 instead."
+          exit 8
+      elif [ "$modelname" = "sdlapp" ]; then
+          echo "Do not use sdlapp for simulator builds; it is already a native SDL application."
+          exit 8
+      fi
+      debug="-DDEBUG"
+      simulator="yes"
+      extradefines="$extradefines -DSIMULATOR -DHAVE_TEST_PLUGINS"
+      flash=""
+      echo "Simulator build selected"
+      ;;
+    [Aa]*)
+      echo "Advanced build selected"
+      whichadvanced $btype
+      ;;
+    [Cc])
+      uname=`uname`
+      simcc "checkwps"
+      toolset='';
+      GCCOPTS='';
+      LDOPTS='';
+      rbdir='.'
+      extradefines="$extradefines  -DDEBUG"
+      appsdir='$(ROOTDIR)/tools/checkwps';
+      output='checkwps.'${modelname};
+      echo "CheckWPS build selected"
+      ;;
+    [Dd])
+      uname=`uname`
+      simcc "database-sdl"
+      toolset='';
+      appsdir='$(ROOTDIR)/tools/database';
+
+      case $uname in
+          CYGWIN*|MINGW*)
+              output="database_${modelname}.exe"
+              ;;
+          *)
+              output='database.'${modelname};
+              ;;
+      esac
+      # architecture, manufacturer and model for the target-tree build
+      t_cpu="hosted"
+      t_manufacturer="sdl"
+      t_model="database"
+      echo "Database tool build selected"
+      ;;
+    [Ww])
+      uname=`uname`
+      simcc "warble"
+      toolset='';
+      t_cpu='';
+      GCCOPTS='';
+      extradefines="$extradefines  -DDEBUG -DWARBLE"
+      output='warble.'${modelname};
+      echo "Warble build selected"
+      ;;
+    *)
+      if [ "$modelname" = "sansae200r" ]; then
+          echo "Do not use the e200R target for regular builds.  Use e200 instead."
+          exit 8
+      fi
+      debug=""
+      btype="N" # set it explicitly since RET only gets here as well
+      echo "Normal build selected"
+      ;;
+
+  esac
+  # to be able running "make manual" from non-manual configuration
+  case $modelname in
+      iriverh1??)
+          manualdev="iriverh100"
+          ;;
+      ipodmini2g)
+          manualdev="ipodmini1g"
+          ;;
+      *)
+          manualdev=$modelname
+          ;;
+  esac
+
+if [ -z "$debug" ]; then
+  GCCOPTS="$GCCOPTS $GCCOPTIMIZE"
+fi
+
+if [ "$bootloader_only" = "1" -a "$bootloader" != "1" ]; then
+    echo "Target can only be used for bootloader builds."
+    exit 9
+fi
+
+# if building a simulator for an hosted port, APPLICATION
+# define clashes with SIMULATOR define
+
+if [ "yes" = "$simulator" ]; then
+    echo Unsetting APPLICATION define for SIMULATOR build
+    unset application
+fi
+
+if [ "yes" = "$application" ]; then
+  echo Building Rockbox as an Application
+  extradefines="$extradefines -DAPPLICATION"
+fi
+
+echo "Using source code root directory: $rootdir"
+
+uname=`uname`
+
+if [ "yes" = "$simulator" ]; then
+  # setup compiler and things for simulator
+  simcc "sdl-sim"
+
+  if [ -d "simdisk" ]; then
+    echo "Subdirectory 'simdisk' already present"
+  else
+    mkdir simdisk
+    echo "Created a 'simdisk' subdirectory for simulating the hard disk"
+  fi
+fi
+
+# Now, figure out version number of the (gcc) compiler we are about to use
+gccver=`$CC -dumpversion`;
+
+# figure out the binutil version too
+if [ $uname = "Darwin" ] && \
+   [ "$app_type" = "sdl-sim" -o \
+     "$app_type" = "sdl-app" -o \
+     "$app_type" = "checkwps" ]; then
+ ldnum=0
+else
+ ldnum=`$LD --version | sed -n '1p' | sed -e 's/.* \([0-9]*\)\.\([0-9]*\).*/\1\2/'`
+fi
+
+if test "$ldnum" -ge "239"; then
+  GLOBAL_LDOPTS="$GLOBAL_LDOPTS -Wl,--no-warn-rwx-segments"
+fi
+
+if test "$ldnum" -ge "227"; then
+  have_nocrossrefs_to="#define HAVE_NOCROSSREFS_TO"
+else
+  have_nocrossrefs_to="#undef HAVE_NOCROSSREFS_TO"
+fi
+
+if [ -z "$gccver" ]; then
+  echo "[WARNING] The compiler you must use ($CC) is not in your path!"
+  echo "[WARNING] this may cause your build to fail since we cannot do the"
+  echo "[WARNING] checks we want now."
+else
+
+  # convert gcc version to a number (major*100 + minor).
+  # Newer compilers may only return the major number, so we neen to fetch the
+  # version using -dumpfullversion. MinGW compilers may return names like
+  # "7.3-win32", so me must strip off the last part.
+ gccver2=`$CC -dumpfullversion -dumpversion | cut -d "-" -f1`;
+ num1=`echo $gccver2 | cut -d . -f1`
+ num2=`echo $gccver2 | cut -d . -f2`
+ gccnum=`(expr $num1 "*" 100 + $num2) 2>/dev/null`
+
+ # This makes:
+ # 3.3.X  => 303
+ # 3.4.X  => 304
+ # 2.95.3 => 295
+ # 7.3-win32 => 703
+
+ echo "Using $CC $gccver ($gccnum)"
+
+ if test "$gccnum" -ge "400"; then
+   # gcc 4.0 is just *so* much pickier on arguments that differ in signedness
+   # so we ignore that warnings for now
+   # -Wno-pointer-sign
+   GCCOPTS="$GCCOPTS -Wno-pointer-sign"
+ fi
+
+ if test "$gccnum" -ge "402"; then
+   # disable warning about "warning: initialized field overwritten" as gcc 4.2
+   # and later would throw it for several valid cases
+   GCCOPTS="$GCCOPTS -Wno-override-init"
+ fi
+
+ if test "$gccnum" -ge "700"; then
+   # gcc 7 spews a bunch of warnings by default
+   GCCOPTS="$GCCOPTS -Wimplicit-fallthrough=0"
+ fi
+
+ case "$GCCOPTS" in
+   *-mcpu=cortex-m7*)
+     # Cortex-M7 support wasn't added until GCC 5. Since we don't use any
+     # M7-specific features, we can compile as Cortex-M4 when on GCC 4.9.
+     if test "$gccnum" -lt "500"; then
+       GCCOPTS=$(echo "$GCCOPTS" | sed -e "s/-mcpu=cortex-m7/-mcpu=cortex-m4 -mthumb/")
+     fi
+     ;;
+ esac
+
+ case $prefix in
+   ""|"$CROSS_COMPILE")
+     # simulator
+   ;;
+   *)
+   # Verify that the cross-compiler is of a recommended version!
+   if test "$gccver" != "$gccchoice"; then
+     echo "WARNING: Your cross-compiler $CC $gccver is not of the recommended"
+     echo "WARNING: version $gccchoice!"
+     echo "WARNING: This may cause your build to fail since it may be a version"
+     echo "WARNING: that isn't functional or known to not be the best choice."
+     echo "WARNING: If you suffer from build problems, you know that this is"
+     echo "WARNING: a likely source for them..."
+   fi
+   ;;
+ esac
+
+fi
+
+
+echo "Using $LD"
+
+makever=`make --version | head -1`
+echo "Detected make $makever"
+
+if [ "$ARG_CCACHE" = "1" ]; then
+  echo "Enable ccache for building"
+  ccache="ccache"
+elif [ "$ARG_CCACHE" != "0" ]; then
+  ccache=`findtool ccache`
+  if test -n "$ccache"; then
+    echo "Found and uses ccache ($ccache)"
+  fi
+else
+  CCACHE_ARG="export CCACHE_DISABLE=true"
+fi
+
+# figure out the full path to the various commands if possible
+HOSTCC=`findtool gcc --lit`
+HOSTAR=`findtool ar --lit`
+CC=`findtool ${CC} --lit`
+CPP=`findtool ${CPP} --lit`
+LD=`findtool ${LD} --lit`
+AR=`findtool ${AR} --lit`
+AS=`findtool ${AS} --lit`
+OC=`findtool ${OC} --lit`
+WINDRES=`findtool ${WINDRES} --lit`
+DLLTOOL=`findtool ${DLLTOOL} --lit`
+DLLWRAP=`findtool ${DLLWRAP} --lit`
+RANLIB=`findtool ${RANLIB} --lit`
+
+# in pure cross-compiler environments without own native compiler this helps:
+HOSTCC=${HOSTCC:-${CC}}
+HOSTAR=${HOSTAR:-${AR}}
+
+# This disables all arch-specific code paths (eg inline asm)
+# for builds that target the host system
+if [ "$app_type" = "sdl-sim" -o "$app_type" = "sdl-app" -o "$app_type" = "checkwps" ]; then
+    arch="none"
+fi
+
+if [ -z "$arch" ]; then
+    cpp_defines=$(echo "" | $CPP $GCCOPTS -dD)
+    if [ -n "$(echo $cpp_defines | grep -w __m68k__)" ]; then
+        arch="m68k"
+    elif [ -n "$(echo $cpp_defines | grep -w __arm__)" ]; then
+        arch="arm"
+        # cpp defines like "#define __ARM_ARCH 4" (where we want to extract the 4)
+        arch_version="$(echo "$cpp_defines" | grep 'define __ARM_ARCH ' | sed -e 's,.* \([0-9]\).*,\1,')"
+        arch_profile="$(echo "$cpp_defines" | grep 'define __ARM_ARCH_PROFILE ' | sed -e 's/.* \([0-9]\{1,\}\)$/\1/')"
+	if test "$gccnum" -ge "800"; then
+	    # GCC8+ can natively emit unified asm syntax
+	    GCCOPTS="$GCCOPTS -masm-syntax-unified"
+	fi
+        case "$arch_profile" in
+            65) # Cortex-A
+                arch_profile=application
+                ;;
+            77) # Cortex-M
+                arch_profile=micro
+
+                # We have a lot of assembly written for ARM32, which won't
+                # successfully assemble on a Thumb-only core due to missing
+                # IT blocks. The recommended practice for portable assembly
+                # is to add explicit IT blocks nowadays.
+                #
+                # This option instructs the assembler to add IT blocks
+                # automatically as needed, which allows the old assembly to
+                # compile unchanged (although it might be sub-optimal).
+                GCCOPTS="$GCCOPTS -Wa,-mimplicit-it=thumb"
+
+                # Disable this option -- it only makes sense for cores that
+                # support both ARM and Thumb instruction sets.
+                if [ "$ARG_ARM_THUMB" = "1" ]; then
+                    echo "Warning: --thumb option has no effect on ARM M profile cores"
+                    ARG_ARM_THUMB=0
+                fi
+                ;;
+            *)
+                # On classic ARM we expect an empty string, so only warn if it's nonempty
+                if [ -z "$arch_profile" ]; then
+                    arch_profile=classic
+		else
+                    echo "Error: Unsupported target ARM profile ($arch_profile)"
+                    exit 1
+                fi
+                ;;
+        esac
+    elif [ -n "$(echo $cpp_defines | grep -w __aarch64__)" ]; then
+        arch="arm64"
+        # cpp defines like "#define __ARM_ARCH 8" (where we want to extract the 8)
+        arch_version="$(echo "$cpp_defines" | grep 'define __ARM_ARCH ' | sed -e 's,.* \([0-9]\).*,\1,')"
+        arch_profile="$(echo "$cpp_defines" | grep 'define __ARM_ARCH_PROFILE ' | sed -e 's/.* \([0-9]\{1,\}\)$/\1/')"
+        case "$arch_profile" in
+            65) # Cortex-A
+                arch_profile=application
+                ;;
+            *)
+                echo "Error: Unsupported target AARCH64 profile ($arch_profile)"
+                exit 1
+                ;;
+        esac
+    elif [ -n "$(echo $cpp_defines | grep -w __mips__)" ]; then
+        arch="mips"
+        arch_version="$(echo "$cpp_defines" | grep 'define __mips ' | sed -e 's/.* \([0-9]\{1,\}\).*/\1/')"
+#	arch_revision="$(echo "$cpp_defines" | grep 'define __mips_isa_rev ' | sed -e 's/.* \([0-9]\{1,\}\).*/\1/')"
+#	if [ -n "$arch_revision" ] ; then
+#	    arch_version="${arch_version}r${arch_revision}"
+#	fi
+    elif [ -n "$(echo $cpp_defines | grep -w __i386__)" ]; then
+        arch="x86"
+    elif [ -n "$(echo $cpp_defines | grep -w __x86_64__)" ]; then
+        arch="amd64"
+    else
+        arch="none"
+        echo "Warning: Could not determine target arch"
+    fi
+    if [ "$arch" != "none" ]; then
+        if [ -n "$arch_version" ]; then
+            if [ -n "$arch_profile" ]; then
+                echo "Automatically selected arch: $arch (ver $arch_version, profile $arch_profile)"
+            else
+                echo "Automatically selected arch: $arch (ver $arch_version)"
+            fi
+        else
+            echo "Automatically selected arch: $arch"
+        fi
+    fi;
+else
+    if [ -n "$arch_version" ]; then
+        echo "Manually selected arch: $arch (ver $arch_version)"
+    else
+        echo "Manually selected arch: $arch"
+    fi
+fi
+
+Darch="#define ARCH arch_$arch"
+if [ -n "$arch_version" ]; then
+    Darch_version="#define ARCH_VERSION $arch_version"
+fi
+if [ -n "$arch_profile" ]; then
+    Darch_profile="#define ARCH_PROFILE $(echo ${arch}_PROFILE_${arch_profile} | tr [a-z] [A-Z])"
+fi
+
+if test -n "$ccache"; then
+  CC="$ccache $CC"
+fi
+
+if test "$ARG_ARM_THUMB" = "1"; then
+  extradefines="$extradefines -DUSE_THUMB"
+  CC="$toolsdir/thumb-cc.py $CC"
+fi
+
+if test "X$endian" = "Xbig"; then
+  defendian="ROCKBOX_BIG_ENDIAN"
+else
+  defendian="ROCKBOX_LITTLE_ENDIAN"
+fi
+
+if [ "$ARG_RBDIR" != "" ]; then
+    if [ -z `echo $ARG_RBDIR | grep '^/'` ]; then
+        rbdir="/"$ARG_RBDIR
+    else
+        rbdir=$ARG_RBDIR
+    fi
+  echo "Using alternate rockbox dir: ${rbdir}"
+fi
+
+if [ "$ARG_STACK_PROTECTOR" != "" ]; then
+    echo "Stack protector mode: $ARG_STACK_PROTECTOR"
+    extradefines="$extradefines -DUSE_STACK_PROTECTOR"
+
+    if [ "$ARG_STACK_PROTECTOR" = "default" ]; then
+        GCCOPTS="$GCCOPTS -fstack-protector"
+    else
+        GCCOPTS="$GCCOPTS -fstack-protector-${ARG_STACK_PROTECTOR}"
+    fi
+fi
+
+# We generally want utf8proc.  Exceptions are:
+#   Bootloaders, checkwps, warble, <4MB RAM
+#   and (temporarily) imx233
+if [ "$apps" = "bootloader" -o "$app_type" = "checkwps" -o "$app_type" = "warble" -o "$memory" -lt "4" -o "$t_manufacturer" = "imx233" ]; then
+    no_utf8proc=1
+fi
+
+cat > autoconf.h.new <<EOF
+/* This header was made by configure */
+#ifndef __BUILD_AUTOCONF_H
+#define __BUILD_AUTOCONF_H
+
+/* lower case names match the what's exported in the Makefile
+ * upper case name looks nicer in the code */
+
+#define arch_none 0
+#define ARCH_NONE 0
+
+#define arch_arm64 1
+#define ARCH_ARM64 1
+
+#define arch_m68k 2
+#define ARCH_M68K 2
+
+#define arch_arm 3
+#define ARCH_ARM 3
+
+#define arch_mips 4
+#define ARCH_MIPS 4
+
+#define arch_x86 5
+#define ARCH_X86 5
+
+#define arch_amd64 6
+#define ARCH_AMD64 6
+
+#define ARM_PROFILE_CLASSIC     0       /* Classic ARM cores (<= ARMv6) */
+#define ARM_PROFILE_MICRO       1       /* ARMv6/ARMv7+ M-profile cores */
+#define ARM_PROFILE_APPLICATION 2       /* ARMv7+ A-profile cores       */
+
+/* Define target machine architecture */
+${Darch}
+/* Optionally define architecture version and/or profile */
+${Darch_version}
+${Darch_profile}
+
+/* Define endianess for the target or simulator platform */
+#define ${defendian} 1
+
+/* Define the GCC version used for the build */
+#define GCCNUM ${gccnum}
+
+/* Define this if you build rockbox to support the logf logging and display */
+${use_logf}
+
+/* Define this if you want logf to output to the serial port */
+${use_logf_serial}
+
+/* Define this to record a chart with timings for the stages of boot */
+${use_bootchart}
+
+/* optional define for FM radio mod for iAudio M5 */
+${have_fmradio_in}
+
+/* optional define for USB Serial */
+${use_usb_serial}
+
+/* optional defines for RTC mod for h1x0 */
+${config_rtc}
+${have_rtc_alarm}
+
+/* the threading backend we use */
+#define ${thread_support}
+
+/* lcd dimensions for application builds from configure */
+${app_lcd_width}
+${app_lcd_height}
+
+/* root of Rockbox */
+#define ROCKBOX_DIR "${rbdir}"
+#define ROCKBOX_SHARE_PATH "${sharedir}"
+#define ROCKBOX_BINARY_PATH "${bindir}"
+#define ROCKBOX_LIBRARY_PATH "${libdir}"
+
+/* linker feature test macro for validating cross-section references */
+${have_nocrossrefs_to}
+
+#endif /* __BUILD_AUTOCONF_H */
+EOF
+
+# Make sure the file is different.
+if ! diff -q autoconf.h.new autoconf.h > /dev/null 2>&1 ; then
+    mv autoconf.h.new autoconf.h
+    echo "Created autoconf.h"
+else
+    rm -f autoconf.h.new
+fi
+
+if test -n "$t_cpu"; then
+  TARGET_INC="-I\$(FIRMDIR)/target/$t_cpu/$t_manufacturer/$t_model"
+
+  if [ "$simulator" = "yes" ]; then # a few more includes for the sim target tree
+    TARGET_INC="$TARGET_INC -I\$(FIRMDIR)/target/hosted/sdl"
+    TARGET_INC="$TARGET_INC -I\$(FIRMDIR)/target/hosted"
+  elif [ "$application" = "yes" ] && [ "$t_manufacturer" = "game_console" ]; then
+    TARGET_INC="$TARGET_INC -I\$(FIRMDIR)/target/hosted/game_console/lib"
+    TARGET_INC="$TARGET_INC -I\$(FIRMDIR)/target/hosted/game_console/lib/bfile"
+  fi
+
+  if [ "$tinyalsa" = "yes" ]; then
+      TARGET_INC="$TARGET_INC -I\$(FIRMDIR)/target/hosted/tinyalsa/include"
+      extradefines="$extradefines -DUSE_TINYALSA"
+  fi
+
+  TARGET_INC="$TARGET_INC -I\$(FIRMDIR)/target/$t_cpu/$t_manufacturer"
+  test -n "$t_soc" && TARGET_INC="$TARGET_INC -I\$(FIRMDIR)/target/$t_cpu/$t_soc"
+  TARGET_INC="$TARGET_INC -I\$(FIRMDIR)/target/$t_cpu"
+  GCCOPTS="$GCCOPTS"
+fi
+
+voicetoolset="rbspeexenc voicefont wavtrim"
+
+if test "$apps" = "apps"; then
+  # only when we build "real" apps we build the .lng files
+  buildlangs="langs"
+fi
+
+#### Fix the cmdline ###
+if [ -n "$ARG_PREFIX" ]; then
+  cmdline="$cmdline --prefix=\$(PREFIX)"
+fi
+if [ -n "$ARG_LCDWIDTH" ]; then
+  cmdline="$cmdline --lcdwidth=$ARG_LCDWIDTH --lcdheight=$ARG_LCDHEIGHT "
+fi
+
+# remove parts from the cmdline we're going to set unconditionally
+cmdline=`echo $cmdline | sed -e s,--target=[a-zA-Z_0-9]\*,,g \
+                            -e s,--ram=[0-9]\*,,g \
+                            -e s,--rbdir=[./a-zA-Z0-9]\*,,g \
+                            -e s,--voice=[-_./a-zA-Z0-9]\*,,g \
+                            -e s,--type=[a-zA-Z0-9]\*,,g`
+cmdline="$cmdline --target=\$(MODELNAME) --ram=\$(MEMORYSIZE) --rbdir=\$(RBDIR) --type=$btype$advopts"
+
+if [ -n "$ARG_PLUGINS" ]; then
+    echo "Selected plugins: $ARG_PLUGINS"
+    plugins="yes"
+
+    selected_src=""
+    selected_subdirs=""
+    chk_plugin_dir="${rootdir}/apps/plugins"
+
+    IFS=":"
+    for p in $ARG_PLUGINS; do
+        if [ -d "$chk_plugin_dir/$p" ]; then
+             selected_subdirs="$selected_subdirs \$(ROOTDIR)/apps/plugins/$p"
+        elif [ -f "$chk_plugin_dir/$p" ]; then
+             selected_src="$selected_src \$(ROOTDIR)/apps/plugins/$p"
+        else
+             echo "Warning: Plugin '$p' found neither as file nor directory in $chk_plugin_dir. Use ':' as the separator."
+        fi
+    done
+else
+    # Build the default set of plugins
+    selected_src="DEFAULT"
+    selected_subdirs="DEFAULT"
+fi
+
+### end of cmdline
+
+cat > Makefile <<EOF
+## Automatically generated. http://www.rockbox.org/
+
+export SELECTED_PLUGINS_SRC=${selected_src}
+export SELECTED_PLUGINS_SUBDIRS=${selected_subdirs}
+
+export ROOTDIR=${rootdir}
+export FIRMDIR=\$(ROOTDIR)/firmware
+export APPSDIR=${appsdir}
+export TOOLSDIR=${toolsdir}
+export DOCSDIR=${rootdir}/docs
+export MANUALDIR=${rootdir}/manual
+export DEBUG=${debug}
+export MODELNAME=${modelname}
+export FLASHFILE=${flash}
+export TARGET_ID=${target_id}
+export TARGET=-D${target}
+export SYSFONT=${sysfont}
+export ARCH=arch_${arch}
+export ARCH_VERSION=${arch_version}
+export ARCH_PROFILE=${arch_profile}
+export CPU=${t_cpu}
+export MANUFACTURER=${t_manufacturer}
+export OBJDIR=${pwd}
+export BUILDDIR=${pwd}
+export RBCODEC_BLD=${pwd}/lib/rbcodec
+export VOICELANGUAGE=${voicelanguage}
+export MEMORYSIZE=${memory}
+ifeq (\$(SOURCE_DATE_EPOCH),)
+export BUILDDATE:=\$(shell date -u +'-DYEAR=%Y -DMONTH=%m -DDAY=%d')
+else
+export BUILDDATE:=\$(shell date -d "@\$(SOURCE_DATE_EPOCH)" -u +'-DYEAR=%Y -DMONTH=%m -DDAY=%d')
+endif
+export MKFIRMWARE=${tool}
+export BMP2RB_MONO=${bmp2rb_mono}
+export BMP2RB_NATIVE=${bmp2rb_native}
+export BMP2RB_REMOTEMONO=${bmp2rb_remotemono}
+export BMP2RB_REMOTENATIVE=${bmp2rb_remotenative}
+export BINARY=${output}
+export APPEXTRA=${appextra}
+export ENABLEDPLUGINS=${plugins}
+export EXTRA_DEFINES=${extradefines}
+export HOSTCC=${HOSTCC}
+export HOSTAR=${HOSTAR}
+export CC=${CC}
+export CPP=${CPP}
+export LD=${LD}
+export AR=${AR}
+export AS=${AS}
+export OC=${OC}
+export WINDRES=${WINDRES}
+export DLLTOOL=${DLLTOOL}
+export DLLWRAP=${DLLWRAP}
+export RANLIB=${RANLIB}
+export PREFIX=${ARG_PREFIX}
+export PROFILE_OPTS=${PROFILE_OPTS}
+export APP_TYPE=${app_type}
+export APPLICATION=${application}
+export SIMDIR=\$(ROOTDIR)/uisimulator/sdl
+export GCCOPTS=${GCCOPTS}
+export TARGET_INC=${TARGET_INC}
+export SHARED_LDFLAGS=${SHARED_LDFLAGS}
+export SHARED_CFLAGS=${SHARED_CFLAGS}
+export LDOPTS=${LDOPTS}
+export GLOBAL_LDOPTS=${GLOBAL_LDOPTS}
+export LDMAP_OPT=${LDMAP_OPT}
+export GCCVER=${gccver}
+export GCCNUM=${gccnum}
+export UNAME=${uname}
+export MANUALDEV=${manualdev}
+export TTS_OPTS=${TTS_OPTS}
+export TTS_ENGINE=${TTS_ENGINE}
+export ENC_OPTS=${ENC_OPTS}
+export ENCODER=${ENCODER}
+export USE_ELF=${USE_ELF}
+export PLUGIN_USE_ELF=${PLUGIN_USE_ELF}
+export RBDIR=${rbdir}
+export ROCKBOX_SHARE_PATH=${sharedir}
+export ROCKBOX_BINARY_PATH=${bindir}
+export ROCKBOX_LIBRARY_PATH=${libdir}
+export SDLCONFIG=${sdl}
+export LCDORIENTATION=${lcd_orientation}
+export ANDROID_ARCH=${ANDROID_ARCH}
+export ANDROID_NDK_PATH=${ANDROID_NDK_PATH}
+export ANDROID_SDK_PATH=${ANDROID_SDK_PATH}
+export FUNKEY_SDK_PATH=${FUNKEY_SDK_PATH}
+export ANDROID_PLATFORM_VERSION=${ANDROID_PLATFORM_VERSION}
+export TOOLSET=${toolset}
+export PIPER_MODEL_DIR=${PIPER_MODEL_DIR}
+export NO_UTF8PROC=${no_utf8proc}
+$CCACHE_ARG
+$LTO_ARG
+
+CONFIGURE_OPTIONS=${cmdline}
+
+include \$(TOOLSDIR)/root.make
+EOF
+
+echo "Created Makefile"

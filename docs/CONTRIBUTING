@@ -1,0 +1,112 @@
+               __________               __   ___.
+     Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+     Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+     Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+     Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+                       \/            \/     \/    \/            \/
+                                 Contribution Policies
+
+
+In order for the project to run as smoothly as possible, it's best if all
+contributors adhere to a few simple source code conventions:
+
+Exceptions
+----------
+This project borrows and imports quite a lot of code from other free software
+projects. We do not change style of such code unless we really have to, even
+though they might be using style very different from others.
+
+Language
+--------
+Write all code in C. Sometimes assembly is faster, but C is always more
+readable and maintainable.
+
+Language features
+-----------------
+Write normal C code. Keep it simple. Don't redefine the language. No new types
+(structs are structs, not typedefs). No C++isms or Javaisms. No code in .h
+files or #defines.
+
+Identifiers
+-----------
+We do not want mixed case identifiers.
+Variables and function names should be all lower case.
+Struct and enum names should be all lower case.
+Preprocessor symbols and enum constants should be all upper case.
+
+Comments
+--------
+We only use plain old /* C standard comments */.
+If you want to comment out large blocks containing other comments, use #if 0.
+
+Style
+-----
+When changing code, follow the code style of the file you are editing.
+
+When writing new files, you may use the brace placement style of your choice.
+
+Braces for function declarations are put in a new line under the name, as in:
+
+  int foo(char *name)
+  {
+      return FOO_NAME:
+  }
+
+Always indent your code with four spaces. Don't use TAB characters, as that
+will mess up code display, printing, and a zillion other places.
+
+Keep lines below 80 columns length. Use whitespace and newlines to make the
+code easy to browse/read.
+
+Text format
+-----------
+Use "unix style" line feeds: "LF" only. Do not use "CR+LF".
+
+Use UTF-8 character set, but try to refrain from using any non-ascii
+letters as they will only appear weird in some camps no matter what.
+
+Contributing code
+-----------------
+We have a public code review system based on git, which is also how you can
+check out the latest version of the Rockbox sources.
+See https://www.rockbox.org/wiki/UsingGit for details on how to setup your
+environment and how to upload a change you have made for review.
+
+We strongly prefer that you don't submit patches to the bug tracker,
+as it's much harder to read and discuss them there.
+
+Real Names
+----------
+Rockbox has the policy that all contributors must supply their real name.
+This includes any code or manual change committed to Git, any contribution
+to the documentation in the Rockbox wiki, and any themes uploaded to the
+official theme site.  Contributors are also credited in our documentation.
+
+There are several reasons for this, but ultimately they come down to
+protecting Rockbox (as an ongoing project) and its individual
+contributors from legal risks.  These risks are not theoretical; in the
+past we have received legal nastygrams accusing us of misappropriating
+private/proprietary code or other IP, forcing us to prove where certain
+contributions had come from.
+
+Contributions without your full real name will be rejected.
+
+For a more in-depth explanation, please read:
+
+  https://www.rockbox.org/wiki/WhyRealNames
+
+Generative AI
+-------------
+We are highly unlikely to review or accept AI-generated or "vibe coded"
+code; our time is very limited, and we need to know that *you* understand
+exactly what the code is doing and why, so that we can review it
+effectively with you.
+
+Code is of no value to Rockbox if it is not maintainable, and it cannot
+be maintained if it is not understood.  Quality is more important than
+quantity.
+
+If you really *must* submit AI-generated code, you must also document
+its provenance including the tools/models used, structure the commits in
+a logical, consistent manner, and be prepared to justify every code
+change.

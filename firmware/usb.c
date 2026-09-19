@@ -1,0 +1,985 @@
+/***************************************************************************
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
+ *
+ * Copyright (C) 2002 by Linus Nielsen Feltzing
+ *
+ * iPod driver based on code from the ipodlinux project - http://ipodlinux.org
+ * Adapted for Rockbox in January 2006
+ * Original file: podzilla/usb.c
+ * Copyright (C) 2005 Adam Johnston
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+ * KIND, either express or implied.
+ *
+ ****************************************************************************/
+#include "config.h"
+#include "cpu.h"
+#include "kernel.h"
+#include "thread.h"
+#include "system.h"
+#include "debug.h"
+#include "storage.h"
+#include "disk.h"
+#include "panic.h"
+#include "lcd.h"
+#include "usb.h"
+#include "button.h"
+#include "string.h"
+#ifdef HAVE_USBSTACK
+#include "usb_core.h"
+#endif
+#include "logf.h"
+#include "screendump.h"
+#include "powermgmt.h"
+
+#ifndef BOOTLOADER
+#include "misc.h"
+#include "gui/yesno.h"
+#include "settings.h"
+#include "lang_enum.h"
+#include "gui/skin_engine/skin_engine.h"
+#endif
+
+
+#if defined(HIBY_R3PROII) || defined(HIBY_R1) || defined(HIDIZS_AP80MAX)
+#include "usb-hiby-gadget.h"
+#endif
+#if defined(DX50) || defined(DX90)
+#include "usb-ibasso.h"
+#endif
+
+#if defined(IPOD_ACCESSORY_PROTOCOL)
+#include "iap.h"
+#endif
+
+#if (!defined(BOOTLOADER) || defined(HAVE_BOOTLOADER_USB_MODE))
+#define USB_FULL_INIT
+#endif
+
+/* USB detect debouncing interval (200ms taken from the usb polling code) */
+#define USB_DEBOUNCE_POLL (200*HZ/1000)
+/* NOTE: "usb_dw_gonak_effective:failed!" *PANIC*s can be observed when
+         disconnecting the FiiO M3K from USB with the debounce interval
+         for USB_STATUS_BY_EVENT set to 200ms, as above (see e75a3fb).
+         Adjusting the interval to 10ms reduces likelihood of a panic. */
+#define USB_DEBOUNCE_TIME (10*HZ/1000)
+
+bool do_screendump_instead_of_usb = false;
+
+#if !defined(SIMULATOR) && !defined(USB_NONE)
+/* We assume that the USB cable is extracted */
+static int usb_state = USB_EXTRACTED;
+#if (CONFIG_STORAGE & STORAGE_MMC) && defined(USB_FULL_INIT) && !defined(HAVE_USBSTACK)
+static int usb_mmc_countdown = 0;
+#endif
+#if defined(HAVE_USB_POWER) || defined(HAVE_USB_ADB)
+#ifdef USB_FULL_INIT
+static bool usb_power_only = false;
+#endif
+static int usb_mode = USBMODE_DEFAULT;
+void usb_set_mode(int mode)
+{
+    usb_mode = mode;
+#if defined(DX50) || defined(DX90)
+    ibasso_set_usb_mode(mode);
+#elif defined(HIBY_R3PROII) || defined(HIBY_R1) || defined(HIDIZS_AP80MAX)
+    hiby_set_usb_mode(mode);
+#endif
+}
+#endif
+
+#ifdef USB_FULL_INIT
+/* Make sure there's enough stack space for screendump */
+#ifndef USB_EXTRA_STACK
+#   define USB_EXTRA_STACK 0x0 /*Define in firmware/export/config/[target].h*/
+#endif
+#ifdef USB_ENABLE_IAP
+#define IAP_EXTRA_STACK DEFAULT_STACK_SIZE*2
+#else
+#define IAP_EXTRA_STACK 0
+#endif
+static long usb_stack[(DEFAULT_STACK_SIZE*4 + DUMP_BMP_LINESIZE + IAP_EXTRA_STACK + USB_EXTRA_STACK)/sizeof(long)];
+static const char usb_thread_name[] = "usb";
+static unsigned int usb_thread_entry = 0;
+static bool usb_monitor_enabled = false;
+static bool exclusive_storage_enabled = false;
+static bool exclusive_storage_requested = false;
+static struct event_queue usb_queue SHAREDBSS_ATTR;
+#ifdef USB_ENABLE_HID
+static bool usb_hid = true;
+#endif
+#ifdef USB_ENABLE_SERIAL
+static bool usb_serial = false;
+#endif
+#ifdef USB_ENABLE_AUDIO
+static int usb_audio = 0;
+#endif
+static bool usb_host_present = false;
+static int usb_num_acks_to_expect = 0;
+static uint32_t usb_broadcast_seqnum = 0x80000000;
+#if defined(USB_FIREWIRE_HANDLING)
+static void try_reboot(void)
+{
+#ifdef HAVE_DISK_STORAGE
+    storage_sleepnow(); /* Immediately spindown the disk. */
+    sleep(HZ*2);
+#endif
+
+#ifdef IPOD_ARCH  /* The following code is based on ipodlinux */
+#if CONFIG_CPU == PP5020
+    memcpy((void *)0x40017f00, "diskmode\0\0hotstuff\0\0\1", 21);
+#elif CONFIG_CPU == PP5022
+    memcpy((void *)0x4001ff00, "diskmode\0\0hotstuff\0\0\1", 21);
+#endif /* CONFIG_CPU */
+#endif /* IPOD_ARCH */
+
+#ifdef IPOD_NANO2G
+    memcpy((void *)0x0002bf00, "diskmodehotstuff\1\0\0\0", 20);
+#endif
+
+    system_reboot(); /* Reboot */
+}
+#endif /* USB_FIRWIRE_HANDLING */
+
+/* Screen dump */
+static inline bool usb_do_screendump(void)
+{
+    if(do_screendump_instead_of_usb)
+    {
+        screen_dump();
+#ifdef HAVE_REMOTE_LCD
+        remote_screen_dump();
+#endif /* HAVE_REMOTE_LCD */
+        return true;
+    }
+    return false;
+}
+
+#ifdef USB_FIREWIRE_HANDLING
+static inline bool usb_reboot_button(void)
+{
+#ifdef HAVE_USB_POWER
+    return (button_status() & ~USBPOWER_BTN_IGNORE);
+#else
+    return false;
+#endif
+}
+#endif /* USB_FIREWIRE_HANDLING */
+
+
+/*--- Routines that differ depending upon the presence of a USB stack ---*/
+
+#ifdef HAVE_USBSTACK
+/* Enable / disable USB when the stack is enabled - otherwise a noop */
+static inline void usb_stack_enable(bool enable)
+{
+    usb_enable(enable);
+}
+
+#ifdef HAVE_HOTSWAP
+static inline void usb_handle_hotswap(long id)
+{
+    switch(id)
+    {
+    case SYS_HOTSWAP_INSERTED:
+    case SYS_HOTSWAP_EXTRACTED:
+        usb_core_hotswap_event(1, id == SYS_HOTSWAP_INSERTED);
+        break;
+    }
+    /* Note: No MMC storage handling is needed with the stack atm. */
+}
+#endif /* HAVE_HOTSWAP */
+
+static inline void usb_configure_drivers(int for_state)
+{
+#ifdef USB_ENABLE_AUDIO
+    // FIXME: doesn't seem to get set when loaded at boot...
+    usb_audio = global_settings.usb_audio;
+#endif
+    switch(for_state)
+    {
+    case USB_POWERED:
+#ifdef USB_ENABLE_STORAGE
+        usb_core_enable_driver(USB_DRIVER_MASS_STORAGE, false);
+#endif
+#ifdef USB_ENABLE_HID
+#ifdef USB_ENABLE_CHARGING_ONLY
+        usb_core_enable_driver(USB_DRIVER_HID, false);
+#else
+        usb_core_enable_driver(USB_DRIVER_HID, true);
+#endif /* USB_ENABLE_CHARGING_ONLY */
+#endif /* USB_ENABLE_HID */
+#ifdef USB_ENABLE_SERIAL
+        usb_core_enable_driver(USB_DRIVER_SERIAL, usb_serial);
+#endif
+#ifdef USB_ENABLE_AUDIO
+        usb_core_enable_driver(USB_DRIVER_AUDIO, (usb_audio == 1) || (usb_audio == 2)); // while "always" or "only in charge-only mode"
+#endif /* USB_ENABLE_AUDIO */
+#ifdef USB_ENABLE_IAP
+        usb_core_enable_driver(USB_DRIVER_IAP, false);
+#endif
+
+#ifdef USB_ENABLE_CHARGING_ONLY
+        usb_core_enable_driver(USB_DRIVER_CHARGING_ONLY, true);
+#endif
+
+        usb_attach();
+        break;
+        /* USB_POWERED: */
+
+    case USB_INSERTED:
+#ifdef USB_ENABLE_STORAGE
+        usb_core_enable_driver(USB_DRIVER_MASS_STORAGE, true);
+#endif
+#ifdef USB_ENABLE_HID
+        usb_core_enable_driver(USB_DRIVER_HID, usb_hid);
+#endif
+#ifdef USB_ENABLE_SERIAL
+        usb_core_enable_driver(USB_DRIVER_SERIAL, usb_serial);
+#endif
+#ifdef USB_ENABLE_AUDIO
+        usb_core_enable_driver(USB_DRIVER_AUDIO, (usb_audio == 1) || (usb_audio == 3)); // while "always" or "only in mass-storage mode"
+#endif /* USB_ENABLE_AUDIO */
+#ifdef USB_ENABLE_IAP
+        usb_core_enable_driver(USB_DRIVER_IAP, true);
+#endif
+#ifdef USB_ENABLE_CHARGING_ONLY
+        usb_core_enable_driver(USB_DRIVER_CHARGING_ONLY, false);
+#endif
+
+        usb_attach();
+        break;
+        /* USB_INSERTED: */
+
+    case USB_EXTRACTED:
+        /* do not call usb_release_exclusive_storage.
+         * usb core handles it */
+        break;
+        /* USB_EXTRACTED: */
+    }
+}
+
+static inline void usb_slave_mode(bool on)
+{
+    int rc;
+
+    if(on)
+    {
+        disk_unmount_all();
+    }
+    else
+    {
+        /* Entered exclusive mode */
+        rc = disk_mount_all();
+        if(rc <= 0) /* no partition */
+        {
+#ifdef BOOTLOADER
+            /* Having no mountable partition is a legitimate state for a
+             * bootloader, not a fault: it is exactly the case the "No
+             * partition found" path already handles, and it is the normal
+             * state of a device whose storage has not been formatted yet
+             * (observed on real hardware while bringing up a from-scratch
+             * NAND/FTL port: unplugging after a USB session panicked here
+             * with "mount: 0" on a blank NAND, before the bootloader could
+             * report anything). Panicking also destroys the very
+             * diagnostics needed to work out why the storage is empty, so
+             * report and carry on and let the caller decide. */
+            DEBUGF("usb: no partition to remount (rc=%d)\n", rc);
+#else
+            panicf("mount: %d",rc);
+#endif
+        }
+    }
+}
+
+void usb_signal_transfer_completion(
+    struct usb_transfer_completion_event_data* event_data)
+{
+    queue_post(&usb_queue, USB_TRANSFER_COMPLETION, (intptr_t)event_data);
+}
+
+void usb_clear_pending_transfer_completion_events(void)
+{
+#ifdef HAVE_EXTENDED_MESSAGING_AND_NAME
+    while (queue_peek_ex(&usb_queue, NULL,
+                         1 | QPEEK_REMOVE_EVENTS,
+                         QPEEK_FILTER1(USB_TRANSFER_COMPLETION)));
+#endif
+}
+
+void usb_signal_notify(long id, intptr_t data)
+{
+    queue_post(&usb_queue, id, data);
+}
+
+#else  /* !HAVE_USBSTACK */
+
+static inline void usb_stack_enable(bool enable)
+{
+    (void)enable;
+}
+
+#ifdef HAVE_HOTSWAP
+static inline void usb_handle_hotswap(long id)
+{
+#if (CONFIG_STORAGE & STORAGE_MMC)
+    switch(id)
+    {
+    case SYS_HOTSWAP_INSERTED:
+    case SYS_HOTSWAP_EXTRACTED:
+        if(usb_state == USB_INSERTED)
+        {
+            usb_enable(false);
+            usb_mmc_countdown = HZ/2; /* re-enable after 0.5 sec */
+        }
+        break;
+    case USB_REENABLE:
+        if(usb_state == USB_INSERTED)
+            usb_enable(true);  /* reenable only if still inserted */
+        break;
+    }
+#endif /* STORAGE_MMC */
+    (void)id;
+}
+#endif /* HAVE_HOTSWAP */
+
+static inline void usb_configure_drivers(int for_state)
+{
+    switch(for_state)
+    {
+    case USB_POWERED:
+        exclusive_storage_requested = false;
+        break;
+    case USB_INSERTED:
+        usb_request_exclusive_storage();
+        break;
+    case USB_EXTRACTED:
+        usb_release_exclusive_storage();
+        break;
+    }
+}
+
+static inline void usb_slave_mode(bool on)
+{
+    int rc;
+
+    if(on)
+    {
+        DEBUGF("Entering USB slave mode\n");
+        disk_unmount_all();
+        storage_soft_reset();
+        storage_init();
+        storage_enable(false);
+        usb_enable(true);
+        cpu_idle_mode(true);
+    }
+    else
+    {
+        DEBUGF("Leaving USB slave mode\n");
+
+        cpu_idle_mode(false);
+
+        /* Let the ISDx00 settle */
+        sleep(HZ*1);
+
+        usb_enable(false);
+
+        rc = storage_init();
+        if(rc)
+            panicf("storage: %d",rc);
+
+        sleep(HZ/10);
+        rc = disk_mount_all();
+        if(rc <= 0) /* no partition */
+            panicf("mount: %d",rc);
+    }
+}
+#endif /* HAVE_USBSTACK */
+
+static void usb_set_host_present(bool present)
+{
+    if(usb_host_present == present)
+        return;
+
+    usb_host_present = present;
+
+    if(!usb_host_present)
+    {
+        usb_configure_drivers(USB_EXTRACTED);
+        return;
+    }
+
+#ifdef HAVE_USB_POWER
+    if (usb_power_only)
+    {
+        /* Only charging is desired */
+        usb_configure_drivers(USB_POWERED);
+        return;
+    }
+#endif
+
+    usb_configure_drivers(USB_INSERTED);
+}
+
+/*--- General driver code ---*/
+static void NORETURN_ATTR usb_thread(void)
+{
+    struct queue_event ev;
+
+    while(1)
+    {
+        queue_wait(&usb_queue, &ev);
+
+        reset_poweroff_timer(); /* Any USB event counts */
+
+
+        switch(ev.id)
+        {
+        /*** Main USB thread duties ***/
+
+#ifdef HAVE_USBSTACK
+        case USB_NOTIFY_SET_ADDR:
+        case USB_NOTIFY_SET_CONFIG:
+        case USB_NOTIFY_BUS_RESET:
+        case USB_NOTIFY_CLASS_DRIVER:
+            if(usb_state <= USB_EXTRACTED) {
+                break;
+            }
+            usb_core_handle_notify(ev.id, ev.data);
+            break;
+        case USB_TRANSFER_COMPLETION:
+            /* Not logged: fires on essentially every USB packet and was
+             * drowning out the once-per-session events that matter (see
+             * get_info's own comment in nand-nano3g.c for the same
+             * reasoning). */
+            if(usb_state <= USB_EXTRACTED)
+                break;
+
+#ifdef USB_DETECT_BY_REQUEST
+            usb_state = USB_INSERTED;
+            usb_set_host_present(true);
+#endif
+
+            usb_core_handle_transfer_completion(
+                (struct usb_transfer_completion_event_data*)ev.data);
+            break;
+#endif /* HAVE_USBSTACK */
+
+        case USB_INSERTED:
+            if(usb_state != USB_EXTRACTED)
+                break;
+
+            if(usb_do_screendump())
+            {
+                usb_state = USB_SCREENDUMP;
+                break;
+            }
+
+            usb_state = USB_POWERED;
+
+            usb_stack_enable(true);
+#ifndef BOOTLOADER
+#ifndef HAVE_USB_POWER
+            int usb_mode = -1;
+#endif
+            send_event(SYS_EVENT_USB_INSERTED, &usb_mode);
+#endif
+#ifdef HAVE_USB_POWER
+            /* Power (charging-only) button */
+            usb_power_only = usb_mode != USB_MODE_MASS_STORAGE;
+            if(button_status() & ~USBPOWER_BTN_IGNORE) {
+                usb_power_only = !usb_power_only;
+            }
+#endif
+
+#ifndef USB_DETECT_BY_REQUEST
+            usb_state = USB_INSERTED;
+            usb_set_host_present(true);
+#endif
+            break;
+            /* USB_INSERTED */
+
+        case SYS_USB_CONNECTED_ACK:
+            if((uint32_t)ev.data != usb_broadcast_seqnum) {
+                DEBUGF("usb: late ack %lX < %lX", ev.data, usb_broadcast_seqnum);
+                break;
+            }
+            if(usb_num_acks_to_expect == 0) {
+                DEBUGF("usb: unexpected ack");
+                break;
+            }
+            if(--usb_num_acks_to_expect > 0) {
+                DEBUGF("usb: got ack, %d to go...\n", usb_num_acks_to_expect);
+                break;
+            }
+
+            DEBUGF("usb: all threads have acknowledged the connect.\n");
+            if(usb_host_present && exclusive_storage_requested) {
+                usb_slave_mode(true);
+                exclusive_storage_enabled = true;
+            }
+            break;
+            /* SYS_USB_CONNECTED_ACK */
+
+        case USB_EXTRACTED:
+            if(usb_state == USB_EXTRACTED)
+                break;
+
+            if(usb_state == USB_POWERED || usb_state == USB_INSERTED)
+                usb_stack_enable(false);
+
+#ifdef IPOD_ACCESSORY_PROTOCOL
+            iap_reset_state(IF_IAP_MP(0));
+#endif
+
+            usb_state = USB_EXTRACTED;
+#ifndef BOOTLOADER
+            send_event(SYS_EVENT_USB_EXTRACTED, NULL);
+#endif
+            usb_set_host_present(false);
+            break;
+            /* USB_EXTRACTED: */
+
+        /*** Miscellaneous USB thread duties ***/
+
+        /* HOTSWAP */
+#ifdef HAVE_HOTSWAP
+        case SYS_HOTSWAP_INSERTED:
+        case SYS_HOTSWAP_EXTRACTED:
+#if (CONFIG_STORAGE & STORAGE_MMC)
+        case USB_REENABLE:
+#endif
+            usb_handle_hotswap(ev.id);
+            break;
+#endif
+
+        /* FIREWIRE */
+#ifdef USB_FIREWIRE_HANDLING
+        case USB_REQUEST_REBOOT:
+            if(usb_reboot_button())
+                try_reboot();
+            break;
+#endif
+
+        /* CHARGING */
+#if defined(HAVE_USB_CHARGING_ENABLE) && defined(HAVE_USBSTACK)
+        case USB_CHARGER_UPDATE:
+            usb_charging_maxcurrent_change(usb_charging_maxcurrent());
+            break;
+#endif
+
+        /* CLOSE */
+#ifdef USB_DRIVER_CLOSE
+        case USB_QUIT:
+            thread_exit();
+            break;
+#endif
+        } /* switch */
+    } /* while */
+}
+
+#if defined(HAVE_USB_CHARGING_ENABLE) && defined(HAVE_USBSTACK)
+void usb_charger_update(void)
+{
+    queue_post(&usb_queue, USB_CHARGER_UPDATE, 0);
+}
+#endif
+
+#ifdef USB_STATUS_BY_EVENT
+#if 0 /* usb_dw_gonak_effective: failed! PANIC */
+static int usb_status_tmo_callback(struct timeout* tmo)
+{
+    if(usb_monitor_enabled)
+    {
+        int current_status = usb_detect();
+        int* last_status = (int*)tmo->data;
+
+        if(current_status != *last_status)
+        {
+            /* Signal changed during the timeout; wait longer */
+            *last_status = current_status;
+            return USB_DEBOUNCE_TIME;
+        }
+
+        /* Signal is stable, post the event. The thread will deal with
+         * any spurious transitions (like inserted -> inserted). */
+        queue_post(&usb_queue, current_status, 0);
+    }
+
+    return 0;
+}
+#endif
+
+void usb_status_event(int current_status)
+{
+#if 0 /* usb_dw_gonak_effective: failed! PANIC */
+    static struct timeout tmo;
+    static int last_status = USB_EXTRACTED;
+#endif
+
+    /* Caller isn't expected to filter for changes in status.
+     * current_status:
+     *   USB_INSERTED, USB_EXTRACTED
+     */
+    if(usb_monitor_enabled)
+    {
+        int oldstatus = disable_irq_save(); /* Dual-use function */
+#if 0 /* usb_dw_gonak_effective: failed! PANIC */
+        last_status = current_status;
+        timeout_register(&tmo, usb_status_tmo_callback, USB_DEBOUNCE_TIME,
+                         (intptr_t)&last_status);
+#else
+        queue_remove_from_head(&usb_queue, current_status);
+        queue_post(&usb_queue, current_status, 0);
+#endif
+        restore_irq(oldstatus);
+    }
+}
+
+void usb_start_monitoring(void)
+{
+    int oldstatus = disable_irq_save(); /* Sync to event */
+    int status = usb_detect();
+
+    usb_monitor_enabled = true;
+
+    /* An event may have been missed because it was sent before monitoring
+     * was enabled due to the connector already having been inserted before
+     * before or during boot. */
+    usb_status_event(status);
+
+#ifdef USB_FIREWIRE_HANDLING
+    if(firewire_detect())
+        usb_firewire_connect_event();
+#endif
+
+    restore_irq(oldstatus);
+}
+
+#ifdef USB_FIREWIRE_HANDLING
+void usb_firewire_connect_event(void)
+{
+    queue_post(&usb_queue, USB_REQUEST_REBOOT, 0);
+}
+#endif /* USB_FIREWIRE_HANDLING */
+
+#else /* !USB_STATUS_BY_EVENT */
+
+static void usb_tick(void)
+{
+    static int usb_countdown = -1;
+    static int last_usb_status = USB_EXTRACTED;
+#ifdef USB_FIREWIRE_HANDLING
+    static int firewire_countdown = -1;
+    static int last_firewire_status = false;
+#endif
+
+    if(usb_monitor_enabled)
+    {
+#ifdef USB_FIREWIRE_HANDLING
+        int current_firewire_status = firewire_detect();
+        if(current_firewire_status != last_firewire_status)
+        {
+            last_firewire_status = current_firewire_status;
+            firewire_countdown = USB_DEBOUNCE_POLL;
+        }
+        else
+        {
+            /* Count down until it gets negative */
+            if(firewire_countdown >= 0)
+                firewire_countdown--;
+
+            /* Report status when the signal has been stable long enough */
+            if(firewire_countdown == 0)
+            {
+                queue_post(&usb_queue, USB_REQUEST_REBOOT, 0);
+            }
+        }
+#endif /* USB_FIREWIRE_HANDLING */
+
+        int current_status = usb_detect();
+
+        /* Only report when the status has changed */
+        if(current_status != last_usb_status)
+        {
+            last_usb_status = current_status;
+            usb_countdown = USB_DEBOUNCE_POLL;
+        }
+        else
+        {
+            /* Count down until it gets negative */
+            if(usb_countdown >= 0)
+                usb_countdown--;
+
+            /* Report status when the signal has been stable long enough */
+            if(usb_countdown == 0)
+            {
+                queue_post(&usb_queue, current_status, 0);
+            }
+        }
+    }
+#if (CONFIG_STORAGE & STORAGE_MMC)
+    if(usb_mmc_countdown > 0)
+    {
+        usb_mmc_countdown--;
+        if(usb_mmc_countdown == 0)
+            queue_post(&usb_queue, USB_REENABLE, 0);
+    }
+#endif
+}
+void usb_start_monitoring(void)
+{
+    usb_monitor_enabled = true;
+}
+#endif /* USB_STATUS_BY_EVENT */
+
+void usb_acknowledge(long id, intptr_t seqnum)
+{
+    queue_post(&usb_queue, id, seqnum);
+}
+#endif /* USB_FULL_INIT */
+
+void usb_init(void)
+{
+    /* Do required hardware inits first. For software USB the driver has
+     * to make sure this won't trigger a transfer completion before the
+     * queue and thread are created. */
+    usb_init_device();
+
+#ifdef USB_FULL_INIT
+    usb_enable(false);
+
+    queue_init(&usb_queue, true);
+
+    usb_thread_entry = create_thread(usb_thread, usb_stack,
+                       sizeof(usb_stack), 0, usb_thread_name
+                       IF_PRIO(, PRIORITY_SYSTEM) IF_COP(, CPU));
+
+#ifndef USB_STATUS_BY_EVENT
+    tick_add_task(usb_tick);
+#endif
+#endif /* USB_FULL_INIT */
+}
+
+void usb_wait_for_disconnect(struct event_queue *q)
+{
+#ifdef USB_FULL_INIT
+    struct queue_event ev;
+
+    /* Don't return until we get SYS_USB_DISCONNECTED */
+    while(1)
+    {
+        queue_wait(q, &ev);
+        if(ev.id == SYS_USB_DISCONNECTED)
+            return;
+    }
+#endif /* USB_FULL_INIT */
+    (void)q;
+}
+
+int usb_wait_for_disconnect_w_tmo(struct event_queue *q, int ticks)
+{
+#ifdef USB_FULL_INIT
+    struct queue_event ev;
+
+    /* Don't return until we get SYS_USB_DISCONNECTED or SYS_TIMEOUT */
+    while(1)
+    {
+        queue_wait_w_tmo(q, &ev, ticks);
+        switch(ev.id)
+        {
+            case SYS_USB_DISCONNECTED:
+                return 0;
+            case SYS_TIMEOUT:
+                return 1;
+        }
+    }
+#endif /* USB_FULL_INIT */
+    (void)q; (void)ticks;
+    return 0;
+}
+
+#ifdef USB_DRIVER_CLOSE
+void usb_close(void)
+{
+    unsigned int thread = usb_thread_entry;
+    usb_thread_entry = 0;
+
+    if(thread == 0)
+        return;
+
+#ifndef USB_STATUS_BY_EVENT
+    tick_remove_task(usb_tick);
+#endif
+    usb_monitor_enabled = false;
+    queue_post(&usb_queue, USB_QUIT, 0);
+    thread_wait(thread);
+}
+#endif /* USB_DRIVER_CLOSE */
+
+bool usb_inserted(void)
+{
+    return usb_state == USB_INSERTED || usb_state == USB_POWERED;
+}
+
+#if defined(USB_FULL_INIT)
+bool usb_exclusive_storage(void)
+{
+    /* Storage isn't actually exclusive until slave mode has been entered */
+    return exclusive_storage_enabled;
+}
+
+/* exclusive storage mode transision
+ * HAVE_USBSTACK:
+ * (inserted)
+ * usb_set_host_present(true)
+ *   usb_configure_drivers(USB_INSERTED)
+ * ...
+ * (SET_CONFIG(n) which requires exclusive storage)
+ * usb_core_do_set_config(n)
+ *   usb_request_exclusive_storage()
+ *     exclusive_storage_requested = true
+ * ...
+ * (all threads acked)
+ * usb_slave_mode(true)
+ *   disk_unmount_all()
+ * exclusive_storage_enabled = true
+ * (exclusive mode done)
+ * ...
+ * (extracted, or SET_CONFIG(m) which does not require exclusive storage)
+ * usb_core_do_set_config(m)
+ *   usb_release_exclusive_storage()
+ *     exclusive_storage_requested = false
+ *     exclusive_storage_enabled = false
+ *       usb_slave_mode(false)
+ *         disk_mount_all()
+ *
+ * !HAVE_USBSTACK:
+ * (inserted)
+ * usb_set_host_present(true)
+ *   usb_configure_drivers(USB_INSERTED)
+ *     usb_request_exclusive_storage()
+ *       exclusive_storage_requested = true
+ * ...
+ * (all threads acked)
+ * usb_slave_mode(true)
+ *   disk_unmount_all()
+ * exclusive_storage_enabled = true
+ * ...
+ * (extracted)
+ *    usb_set_host_present(false)
+ *      usb_configure_drivers(USB_EXTRACTED)
+ *          usb_release_exclusive_storage()
+ *          ..
+ * */
+
+void usb_request_exclusive_storage(void)
+{
+    exclusive_storage_requested = true;
+    usb_broadcast_seqnum += 1;
+    usb_num_acks_to_expect = queue_broadcast(SYS_USB_CONNECTED, usb_broadcast_seqnum) - 1;
+    DEBUGF("usb: waiting for %d acks...\n", usb_num_acks_to_expect);
+}
+
+void usb_release_exclusive_storage(void)
+{
+    int bccount;
+    if(!exclusive_storage_requested) {
+        return;
+    }
+    exclusive_storage_requested = false;
+
+    if(exclusive_storage_enabled) {
+        usb_slave_mode(false);
+    }
+    exclusive_storage_enabled = false;
+
+    /* Tell all threads that we are back in business */
+    bccount = queue_broadcast(SYS_USB_DISCONNECTED, 0) - 1;
+#ifdef DEBUG
+    DEBUGF("USB extracted. Broadcast to %d threads...\n", bccount);
+#else
+    (void)bccount;
+#endif
+    return;
+}
+
+#ifdef USB_ENABLE_HID
+void usb_set_hid(bool enable)
+{
+    usb_hid = enable;
+    usb_core_enable_driver(USB_DRIVER_HID, usb_hid);
+}
+#endif /* USB_ENABLE_HID */
+
+#ifdef USB_ENABLE_SERIAL
+void usb_set_serial(bool enable)
+{
+    usb_serial = enable;
+    usb_core_enable_driver(USB_DRIVER_SERIAL, usb_serial);
+}
+
+bool usb_get_serial(void)
+{
+    return usb_serial;
+}
+#endif /* USB_ENABLE_SERIAL */
+
+#ifdef USB_ENABLE_AUDIO
+void usb_set_audio(int value)
+{
+    usb_audio = value;
+}
+#endif /* USB_ENABLE_AUDIO */
+
+#ifdef HAVE_USB_POWER
+bool usb_powered_only(void)
+{
+    return usb_power_only;
+}
+#endif /* HAVE_USB_POWER */
+
+#endif /* HAVE_USBSTACK && defined(USB_FULL_INIT) */
+
+#elif defined(USB_NONE)
+/* Dummy functions for USB_NONE  */
+
+bool usb_inserted(void)
+{
+    return false;
+}
+
+void usb_acknowledge(long id, intptr_t seqnum)
+{
+    (void)id;
+    (void)seqnum;
+}
+
+void usb_init(void)
+{
+}
+
+void usb_start_monitoring(void)
+{
+}
+
+int usb_detect(void)
+{
+    return USB_EXTRACTED;
+}
+
+void usb_wait_for_disconnect(struct event_queue *q)
+{
+   (void)q;
+}
+#endif /* USB_NONE */

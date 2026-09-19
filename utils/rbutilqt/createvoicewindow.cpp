@@ -1,0 +1,179 @@
+/***************************************************************************
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
+ *
+ *   Copyright (C) 2007 by Dominik Riebeling
+ *
+ * All files in this archive are subject to the GNU General Public License.
+ * See the file COPYING in the source tree root for full license agreement.
+ *
+ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+ * KIND, either express or implied.
+ *
+ ****************************************************************************/
+
+#include <QMessageBox>
+#include "createvoicewindow.h"
+#include "ui_createvoicefrm.h"
+
+#include "configure.h"
+#include "rbsettings.h"
+#include "playerbuildinfo.h"
+#include "Logger.h"
+
+CreateVoiceWindow::CreateVoiceWindow(QWidget *parent) : QDialog(parent)
+{
+    ui.setupUi(this);
+    updateSettings();
+    connect(ui.change,&QAbstractButton::clicked,this,&CreateVoiceWindow::change);
+}
+
+void CreateVoiceWindow::change()
+{
+    // save window settings
+    saveSettings();
+
+    // call configuration dialog
+    Config *cw = new Config(this,4);
+    connect(cw, &Config::settingsUpdated, this, &CreateVoiceWindow::updateSettings);
+    cw->show();    
+}
+
+void CreateVoiceWindow::accept()
+{
+    // Do not start a second job while voice creation is still running.
+    if(workerThread)
+        return;
+
+    logger = new ProgressLoggerGui(this);
+    connect(logger,&ProgressLoggerGui::closed,this,&QWidget::close);
+    logger->show();    
+
+    saveSettings();
+    
+    // Voice generation invokes the TTS engine and encoder synchronously. Run
+    // it in a worker thread so the GUI (including accessibility support) stays
+    // responsive while a voice file is being created.
+    workerThread = new QThread(this);
+    voicecreator = new VoiceFileCreator(nullptr);
+
+    //configure voicecreator
+    QString suffix = RbSettings::value(RbSettings::Suffix).toString();
+    QString mountpoint = RbSettings::value(RbSettings::Mountpoint).toString();
+
+    if (!suffix.isEmpty()) {
+        QString fullpath = mountpoint + suffix;
+        voicecreator->setMountPoint(fullpath);
+    } else {
+        voicecreator->setMountPoint(mountpoint);
+    }
+
+    voicecreator->setLang(ui.comboLanguage->itemData(ui.comboLanguage->currentIndex()).toString());
+    voicecreator->setWavtrimThreshold(ui.wavtrimthreshold->value());
+       
+    //start creating
+    connect(voicecreator, &VoiceFileCreator::done, logger, &ProgressLoggerGui::setFinished);
+    connect(voicecreator, &VoiceFileCreator::logItem, logger, &ProgressLoggerGui::addItem);
+    connect(voicecreator, &VoiceFileCreator::logProgress, logger, &ProgressLoggerGui::setProgress);
+    // abort() only emits a signal connected to the generator's atomic abort
+    // flag, so it is safe to call while the worker is inside a TTS request.
+    connect(logger, &ProgressLoggerGui::aborted,
+            voicecreator, &VoiceFileCreator::abort, Qt::DirectConnection);
+
+    voicecreator->moveToThread(workerThread);
+    connect(workerThread, &QThread::started,
+            voicecreator, &VoiceFileCreator::createVoiceFile);
+    connect(voicecreator, &VoiceFileCreator::done,
+            workerThread, &QThread::quit);
+    connect(voicecreator, &VoiceFileCreator::done,
+            voicecreator, &QObject::deleteLater);
+    connect(workerThread, &QThread::finished,
+            workerThread, &QObject::deleteLater);
+    connect(workerThread, &QThread::finished, this, [this]() {
+        voicecreator = nullptr;
+        workerThread = nullptr;
+    });
+    workerThread->start(QThread::LowPriority);
+}
+
+
+/** @brief update displayed settings
+ */
+void CreateVoiceWindow::updateSettings(void)
+{
+    // fill in language combobox. Map has QString as value, but is stored as QVariant.
+    QMap<QString, QVariant> langs
+            = PlayerBuildInfo::instance()->value(PlayerBuildInfo::LanguageList).toMap();
+    for(auto it = langs.begin(); it != langs.end(); it++) {
+        ui.comboLanguage->addItem(it.value().toString(), it.key());
+    }
+    // set saved lang
+    int sel = ui.comboLanguage->findData(
+            RbSettings::value(RbSettings::VoiceLanguage).toString());
+    // if no saved language is found try to figure the language from the UI lang
+    if(sel == -1) {
+        // the UI language is stored as ISO 631-1 code. Try to resolve it to the
+        // Rockbox language string.
+        QString uilang = RbSettings::value(RbSettings::Language).toString();
+        // default to english if no language is set.
+        if(uilang.isEmpty()) {
+            // FIXME: we try to set the UI language from the environment, but
+            // don't store it unless changed. Falling back to en is only valid
+            // if the system is actually english.
+            uilang = "en";
+        }
+        QString l = PlayerBuildInfo::instance()->value(
+                    PlayerBuildInfo::LanguageInfo, uilang).toStringList().at(0);
+        if(!l.isEmpty()) {
+            sel = ui.comboLanguage->findData(l);
+        }
+    }
+    ui.comboLanguage->setCurrentIndex(sel);
+
+    QString ttsName = RbSettings::value(RbSettings::Tts).toString();
+    TTSBase* tts = TTSBase::getTTS(this,ttsName);
+    if(!tts)
+    {
+        QMessageBox::critical(this, tr("TTS error"),
+            tr("The selected TTS failed to initialize. You can't use this TTS."));
+        return;
+    }
+    if(tts->configOk())
+        ui.labelTtsProfile->setText(tr("Engine: <b>%1</b>")
+            .arg(TTSBase::getTTSName(ttsName)));
+    else
+        ui.labelTtsProfile->setText(tr("Engine: <b>%1</b>")
+            .arg("Invalid TTS configuration!"));
+
+    ui.wavtrimthreshold->setValue(RbSettings::value(RbSettings::WavtrimThreshold).toInt());
+    emit settingsUpdated();
+}
+
+
+/** @brief save options
+  */
+void CreateVoiceWindow::saveSettings(void)
+{
+    // save selected language
+    RbSettings::setValue(RbSettings::VoiceLanguage,
+                         ui.comboLanguage->itemData(ui.comboLanguage->currentIndex()).toString());
+    // save wavtrim threshold value
+    RbSettings::setValue(RbSettings::WavtrimThreshold,
+                         ui.wavtrimthreshold->value());
+    RbSettings::sync();
+}
+
+void CreateVoiceWindow::changeEvent(QEvent *e)
+{
+    if(e->type() == QEvent::LanguageChange) {
+        ui.retranslateUi(this);
+        updateSettings();
+    } else {
+        QWidget::changeEvent(e);
+    }
+}
+

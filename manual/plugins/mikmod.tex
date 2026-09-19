@@ -1,0 +1,92 @@
+\subsection{Mikmod}
+
+Mikmod plays most common tracker music formats.
+
+\begin{btnmap}
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD%
+        ,IAUDIO_X5_PAD,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD%
+        ,SAMSUNG_YH820_PAD,RG_NANO_PAD}{\ButtonUp/ \ButtonDown}
+    \opt{IPOD_3G_PAD,IPOD_4G_PAD,SANSA_E200_PAD,SANSA_FUZE_PAD}{\ButtonScrollFwd/ \ButtonScrollBack}
+    \opt{IRIVER_H10_PAD,MPIO_HD300_PAD}{\ButtonScrollUp/ \ButtonScrollDown}
+    \opt{SANSA_C200_PAD,SANSA_CLIP_PAD,MPIO_HD200_PAD}{\ButtonVolUp/ \ButtonVolDown}
+    \opt{COWON_D2_PAD}{\TouchTopMiddle{} / \TouchBottomMiddle}
+    \opt{XDUOO_X3_PAD}{\ButtonVolUp/ \ButtonVolDown}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    & Volume up/ Volume down\\
+    %
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD%
+        ,IAUDIO_X5_PAD,MROBE100_PAD,IPOD_3G_PAD,IPOD_4G_PAD,SANSA_E200_PAD%
+        ,SANSA_FUZE_PAD,IRIVER_H10_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,PBELL_VIBE500_PAD%
+        ,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD,RG_NANO_PAD}
+        {\ButtonRight/ \ButtonLeft}
+    \opt{MPIO_HD200_PAD,MPIO_HD300_PAD}{\ButtonFF / \ButtonRew}
+    \opt{COWON_D2_PAD}{\TouchMidRight{} / \TouchMidLeft}
+    \opt{XDUOO_X3_PAD}{\ButtonNext/ \ButtonPrev}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    & Skip to next/prev file\\
+    %
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD%
+        ,IAUDIO_X5_PAD,MROBE100_PAD,IPOD_3G_PAD,IPOD_4G_PAD,SANSA_E200_PAD%
+        ,SANSA_FUZE_PAD,IRIVER_H10_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,PBELL_VIBE500_PAD%
+        ,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD,RG_NANO_PAD}
+        {Long \ButtonRight/ Long \ButtonLeft}
+    \opt{MPIO_HD200_PAD,MPIO_HD300_PAD}{Long \ButtonFF / Long \ButtonRew}
+    \opt{COWON_D2_PAD}{Long \TouchMidRight{} / Long \TouchMidLeft}
+    \opt{XDUOO_X3_PAD}{Long \ButtonNext/ Long \ButtonPrev}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    & Skip to next/prev sequence\\
+    %
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOn}
+    \opt{IPOD_3G_PAD,IPOD_4G_PAD,GIGABEAT_S_PAD,IAUDIO_X5_PAD,IRIVER_H10_PAD,PBELL_VIBE500_PAD%
+        ,MPIO_HD200_PAD,MPIO_HD300_PAD,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}
+        {\ButtonPlay}
+    \opt{SANSA_E200_PAD,SANSA_FUZE_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD}{\ButtonUp}
+    \opt{GIGABEAT_PAD}{\ButtonA}
+    \opt{MROBE100_PAD}{\ButtonDisplay}
+    \opt{COWON_D2_PAD}{\TouchCenter}
+    \opt{XDUOO_X3_PAD}{\ButtonPlay}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonA}
+    & Pause/Resume playback\\
+    %
+    \opt{XDUOO_X3_PAD}{\ButtonOption}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{\ButtonB}
+    & Enter configuration menu\\
+    %
+    \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOff}
+    \opt{IPOD_3G_PAD,IPOD_4G_PAD}{\ButtonSelect+\ButtonMenu}
+    \opt{GIGABEAT_PAD,GIGABEAT_S_PAD,SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,IAUDIO_X5_PAD%
+        ,IRIVER_H10_PAD,MROBE100_PAD,COWON_D2_PAD,SANSA_FUZEPLUS_PAD}{\ButtonPower}
+    \opt{SANSA_FUZE_PAD}{Long \ButtonHome}
+    \opt{PBELL_VIBE500_PAD}{\ButtonRec}
+    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{Long \ButtonPlay}
+    \opt{MPIO_HD200_PAD}{\ButtonRec + \ButtonPlay}
+    \opt{MPIO_HD300_PAD}{Long \ButtonMenu}
+    \opt{XDUOO_X3_PAD}{\ButtonPower}
+       \opt{HAVEREMOTEKEYMAP}{& }
+    \opt{RG_NANO_PAD}{Long \ButtonA{} or Long \ButtonL{}}
+    & Stop playback and quit\\
+\end{btnmap}
+
+Mikmod is highly configurable, and has many setting that affect output quality.  However, 
+less powerful \dap{}s may lack the cpu resources that higher quality settings require, expecially
+on more complex modules.  Settings are saved and re-loaded automatically.
+
+\subsubsection{Configuration}
+\begin {description}
+\item [Panning Separation]
+    Specifies how far to separate Left and Right channels.  128 is full separation, 0 is none, effectively resulting in mono sound.
+\item [Reverberation]
+    Specifies the amount of reberb (echo) to add to the mix.  0 is disabled.
+\item [Interpolation]
+    Enabling this improves the sound of lower-quality instruments.  Recommended.
+\item [Swap Channels]
+    Swaps the left and right channels.
+\item [Surround]
+    Enables a faux-surround effect.
+\item [HQ Mixer]
+    Enables a high quality audio mixer that is very CPU intensive.  Must restart the plugin to take effect.
+\item [Sample Rate]
+    Select the sample/mixing rate for playback.  44.1KHz or higher is recommended, but you can select from any rate the \dap{} natively supports.
+\end {description}

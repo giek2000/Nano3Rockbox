@@ -1,0 +1,32 @@
+#             __________               __   ___.
+#   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+#   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+#   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+#   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+#                     \/            \/     \/    \/            \/
+#
+
+MIKMODSRCDIR := $(APPSDIR)/plugins/mikmod
+MIKMODBUILDDIR := $(BUILDDIR)/apps/plugins/mikmod
+
+ROCKS += $(MIKMODBUILDDIR)/mikmod.rock
+
+MIKMOD_SRC := $(call preprocess, $(MIKMODSRCDIR)/SOURCES)
+MIKMOD_OBJ := $(call c2obj, $(MIKMOD_SRC))
+
+# add source files to OTHER_SRC to get automatic dependencies
+OTHER_SRC += $(MIKMOD_SRC)
+
+MIKMODCFLAGS = $(PLUGINFLAGS) -I$(MIKMODSRCDIR) -O2 -DMIKMOD_STATIC
+
+# Disable stringop-truncation warnings on GCC 8 or greater
+ifeq ($(shell expr $(GCCNUM) \> 800),1)
+    MIKMODCFLAGS += -Wno-stringop-truncation
+endif
+
+$(MIKMODBUILDDIR)/mikmod.rock: $(MIKMOD_OBJ) $(TLSFLIB)
+
+# new rule needed to use extra compile flags
+$(MIKMODBUILDDIR)/%.o: $(MIKMODSRCDIR)/%.c
+	$(SILENT)mkdir -p $(dir $@)
+	$(call PRINTS,CC $(subst $(ROOTDIR)/,,$<))$(CC) $(MIKMODCFLAGS) -c $< -o $@

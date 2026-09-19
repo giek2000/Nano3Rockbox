@@ -1,0 +1,40 @@
+               __________               __   ___.
+     Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+     Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+     Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+     Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+                       \/            \/     \/    \/            \/
+
+                         Rockbox Font Collection
+
+Fonts put here need to follow a few rules:
+
+1. All fonts must be in standard unicode encoding (ISO10646-1). ISO8859-1
+   would also work, but should be avoided for consistency, and converted to
+   unicode (it's a trivial change of declaration, the actual code positions
+   stay the same).
+   Other encodings will break text output in rockbox for any non-ASCII text
+   and are hence not allowed.
+   
+2. All fonts need to adhere to the following naming convention for easy
+   browsing in rockbox:
+
+      NN-Family-Variant.bdf
+
+   NN is the height _in pixels_ when converted to .fnt with convbdf, zero
+   padded for proper sorting in the file browser.
+
+   "Family" is the font family (might consist of more than one part, e.g.
+   "Adobe-Helvetica")
+   
+   "Variant" covers the weight and variant (might also consist of more than
+   one part e.g. "Cond-BoldItalic"). This part should be left out if it is
+   Regular/Normal/Medium. Do not abbreviate variant names unless they're
+   overly long (keep in mind that the rockbox target displays vary a lot in
+   size).
+
+3. Fonts must have a suitable license for redistribution.
+
+4. Fonts should be carefully selected, judging quality over quantity. A font
+   that only covers ASCII isn't worth much. Rockbox supports a lot of
+   languages.

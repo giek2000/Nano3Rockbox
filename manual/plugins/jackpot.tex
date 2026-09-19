@@ -1,0 +1,15 @@
+\subsection{Jackpot}
+\screenshot{plugins/images/ss-jackpot}{Jackpot}{img:Jackpot}
+This is a jackpot slot machine game. At the beginning of the game you
+have 20\$.  Payouts are given when three matching symbols come up.
+
+\begin{btnmap}
+    \PluginSelect
+      \opt{HAVEREMOTEKEYMAP}{& \PluginRCSelect}
+    & Play\\
+
+    \nopt{IPOD_4G_PAD,IPOD_3G_PAD}{\PluginCancel}
+    \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ButtonMenu}
+      \opt{HAVEREMOTEKEYMAP}{& \PluginRCCancel}
+    & Exit the game \\
+\end{btnmap}

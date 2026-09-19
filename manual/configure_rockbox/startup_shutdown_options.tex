@@ -1,0 +1,109 @@
+
+\section{\label{ref:StartupShutdownOptions}Startup/Shutdown}
+
+The \setting{Startup/Shutdown} sub menu allows you to configure items which
+are run at startup, or initiate a shutdown when conditions are met.
+
+\begin{description}
+    \item[Show Shutdown Message.] If set, a message will be displayed and the display
+    will light up before the device shuts down.
+\end{description}
+
+\subsection{Start Screen}
+  Set the screen that Rockbox will start in. The default is the main menu but
+  the following options are available:
+  % almost all items in the main menu with a few exceptions
+  \begin{description}
+    \item[Previous Screen.] Start Rockbox in the same screen as when it was
+    shut off.
+    \item[Main Menu.] Show the main menu.
+    \item[Files.] Display the file browser, starting in the root directory of
+    your \dap.
+    \item[Database.] Show the default database view.
+    \item[Resume Playback.] Go to the WPS and and resume playback from where
+    it was before turning off (if there is a playlist to resume).
+    \item[Settings.] Display the main settings menu.
+    \opt{recording}{
+      \item[Recording.] Start the \dap{} in the recording screen
+      (recording does not start automatically).
+    }
+    \opt{radio}{
+      \item[FM Radio.] Go to the radio screen and start playing.
+    }
+    \item[Recent Bookmarks.] Show the list of recent bookmarks as
+      described in \reference{ref:Bookmarkconfigactual}. Bookmarking needs
+      to be enabled.
+  \end{description}
+
+\opt{clear_settings_on_hold}{
+  \opt{ipod}{
+    \subsection{\label{ref:ClearOnHold}Hold switch clears settings on startup }
+      This option controls whether Rockbox clears its configuration if the hold
+      switch is enabled during startup.
+
+      \begin{description}
+        \item[Yes.]
+              Clear the settings if the hold switch is enabled during startup.
+        \item[No.]
+              Do not clear the settings, regardless of the hold switch's position.
+        \end{description}
+  }
+  \nopt{ipod}{
+    \opt{GIGABEAT_S_PAD}{
+      \subsection{\label{ref:ClearOnHold}BUTTON A clears settings on startup }
+        This option controls whether Rockbox clears its configuration if BUTTON_A
+ is held during startup.
+        \begin{description}
+          \item[Yes.]
+                Clear the settings if the BUTTON A is held.
+          \item[No.]
+                Do not clear the settings, regardless of BUTTON A.
+          \end{description}
+    }
+    \nopt{GIGABEAT_S_PAD}{
+      \subsection{\label{ref:ClearOnHold}BUTTON REC clears settings on startup }
+        This option controls whether Rockbox clears its configuration if BUTTON REC
+ is held during startup.
+        \begin{description}
+          \item[Yes.]
+                Clear the settings if the BUTTON REC is held.
+          \item[No.]
+                Do not clear the settings, regardless of BUTTON REC.
+          \end{description}
+    }
+  }
+}
+
+\subsection{\label{ref:IdlePoweroffSetting}Idle Poweroff}
+  Rockbox can be configured to turn off power after the unit has been idle for
+  a defined number of minutes. The \dap{} is idle when playback is stopped or
+  paused. It is not idle while the USB or charger is connected
+  \opt{recording}{, or while recording}.
+  Settings are either \setting{Off} or 1 to 10 minutes in 1 minute steps. Then
+  15, 30, 45 or 60 minutes are available.
+
+\subsection{Sleep Timer}
+  The \setting{Sleep Timer} powers off your \dap{} after a given time, whether
+  playing or not.
+  \begin{description}
+    \item[Start Sleep Timer (\emph{duration}):]
+      Shown when the \setting{Sleep Timer} is inactive, this option will
+      initiate a \setting{Sleep Timer} with the duration shown in brackets.
+    \item[Cancel Sleep Timer (\emph{remaining}):]
+      Shown when the \setting{Sleep Timer} is active, this option will cancel
+      the current \setting{Sleep Timer}.\\
+      The time remaining before completion is shown in brackets.
+    \item[Default Sleep Timer Duration:]
+      The default number of minutes a new \setting{Sleep Timer} will run
+      for.\\
+      The values range from 5 minutes to 5 hours in 5 minute steps.\\
+      If a timer is currently active, the timer's duration will be set to the
+      newly entered value.\\
+      The value set is persistent, see \reference{ref:config_file_options}.
+    \item[Start Sleep Timer On Boot:]
+      If set, a \setting{Sleep Timer} will be initiated when the device
+      starts.
+    \item[Restart Sleep Timer On Keypress:]
+      If set, when a \setting{Sleep Timer} is active and a key is pressed, the
+      \setting{Sleep Timer} will be restarted with the initial duration.
+  \end{description}

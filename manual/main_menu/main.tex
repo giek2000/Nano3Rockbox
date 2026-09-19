@@ -1,0 +1,361 @@
+\chapter{The Main Menu}
+\section{\label{ref:main_menu}Introducing the Main Menu}
+\screenshot{main_menu/images/ss-main-menu}{The main menu}{}
+The \setting{Main Menu} is the screen from which all of the Rockbox functions
+can be accessed. This is the first screen you will see when starting Rockbox.
+To return to the \setting{Main Menu}, press the \ActionStdMenu{} button.
+
+All settings are stored on the unit. However, Rockbox does not access 
+the \disk{} solely for the purpose of saving settings. Instead, Rockbox will
+save settings when it accesses the \disk{} the next time, for example when 
+refilling the music buffer or navigating through the \setting{File Browser}.
+Changes to settings may therefore not be saved unless the \dap{} is shut down
+safely (see \reference{ref:Safeshutdown}).
+
+\section{Navigating the Main Menu}
+  \begin{btnmap}
+    \ActionStdNext
+        &
+    \opt{HAVEREMOTEKEYMAP}{\ActionRCStdNext
+        &}
+    Select the next option in the menu.\newline
+    Inside a setting, increase the value or choose next option.
+        \\
+    %
+    \ActionStdPrev
+        &
+    \opt{HAVEREMOTEKEYMAP}{\ActionRCStdPrev
+        &}
+    Select the previous option in the menu.\newline
+    Inside a setting,decrease the value or choose previous option.
+        \\
+    %
+    \ActionStdOk
+        &
+    \opt{HAVEREMOTEKEYMAP}{\ActionRCStdOk
+        &}
+    Select option.
+        \\
+    %
+    \ActionStdCancel
+        &
+    \opt{HAVEREMOTEKEYMAP}{\ActionRCStdCancel
+        &}
+    Exit menu or setting, or move to parent menu.
+        \\
+  \end{btnmap}
+
+\section {Recent Bookmarks}
+\screenshot{main_menu/images/ss-list-bookmarks}%
+{The list bookmarks screen}{}
+If the \setting{Save a list of recently created bookmarks} option is enabled 
+then you can view a list of several recent bookmarks here and select one to 
+jump straight to that track.\\*
+
+ \note{A track launched from the file browser can be bookmarked as-is. For
+       tracks launched via the database, or for modified playlists, you're
+       asked to save the playlist to a file when creating a bookmark.\\*} 
+
+  \begin{btnmap}
+    \ActionStdNext
+    \opt{HAVEREMOTEKEYMAP}{& \ActionRCStdNext}
+    & Select the next bookmark.\\
+    %
+    \ActionStdPrev
+    \opt{HAVEREMOTEKEYMAP}{& \ActionRCStdPrev}
+    & Select the previous bookmark.\\
+    %
+    \ActionStdOk
+    \opt{HAVEREMOTEKEYMAP}{& \ActionRCStdOk}
+    & Resume from the selected bookmark.\\
+    %
+    \ActionStdCancel
+    \opt{HAVEREMOTEKEYMAP}{& \ActionRCStdCancel}
+    & Exit Recent Bookmark menu.\\
+    %
+    \nopt{GIGABEAT_S_PAD}{\ActionBmDelete
+    \opt{HAVEREMOTEKEYMAP}{& \ActionRCBmDelete}
+    & Delete the currently selected bookmark.\\}
+    %
+    \ActionStdContext
+    \opt{HAVEREMOTEKEYMAP}{& \ActionRCStdContext}  
+    & Enter the context menu for the selected bookmark.\\
+  \end{btnmap}
+
+There are two options in the context menu:\\*
+  
+  \setting{Resume} will commence playback of the currently selected bookmark entry.
+  
+  \setting{Delete} will remove the currently selected bookmark entry from the list.\\*
+  
+This entry is not shown in the \setting{Main Menu} when the option is off
+(the default setting).  See \reference{ref:Bookmarkconfigactual} 
+for more details on configuring bookmarking in Rockbox.
+
+\section{Files}
+Browse the files on your \dap{} (see \reference{ref:file_browser}).
+
+\section{Database}
+Browse by the meta-data in your audio files (see \reference{ref:database}).
+
+\section{Now Playing/Resume Playback}
+Go to the \setting{While Playing Screen} and resume if music playback is
+stopped or paused and there is something to resume (see \reference{ref:WPS}).
+
+\section{Settings}
+
+The \setting{Settings} menu allows you to set or adjust many parameters that
+affect the way your \dap{} works. There are many submenus for different
+parameter areas. Every time you are setting a value of a parameter, and that
+value is selected from a list of some predefined available values, you can press
+\ActionStdContext, and the selection cursor will jump to the default value for
+the parameter. You can then confirm or cancel the value. This is useful if you
+have changed the value of the parameter from the default to some other value and
+would like to restore the default value.
+
+\subsection{Sound Settings}
+The \setting{Sound Settings} menu offers a selection of sound properties you may 
+change to customise your listening experience. The details of this menu are covered
+in \reference{ref:configure_rockbox_sound}.
+
+\subsection{Playback Settings}
+The \setting{Playback Settings} menu allows you to configure settings related
+to audio playback. The details of this menu are covered
+in \reference{ref:configure_rockbox_playback}.
+
+\subsection{General Settings}
+The \setting{General Settings} menu allows you to customise the way Rockbox looks 
+and the way it plays music. The details of this menu are covered in
+\reference{ref:configure_rockbox_general}.
+
+\subsection{Theme Settings}
+The \setting{Theme Settings} menu contains options that control the visual
+appearance of Rockbox. The details of this menu are covered in
+\reference{ref:configure_rockbox_themes}.
+
+\opt{recording}{
+\subsection{Recording Settings}
+The \setting{Recording Settings} menu allows you to configure settings related
+to recording. The details of this menu are covered in detail in
+\reference{ref:Recordingsettings}.
+}
+
+\subsection{Main Menu}
+{\label{ref:main_menu_config}}
+Allows you to hide or reorder items from the main menu.
+
+Press \ActionStdOk{} to toggle an item's visibility.
+
+Press \ActionStdContext{} to access the following options:
+\begin{description}
+\item[Move Item Up] Swap selected menu item with the previous one
+\item[Move Item down] Swap selected menu item with the next one
+\item[Load Default Configuration] Discard all customization
+\end{description}
+
+For an advanced description of the associated configuration entry,
+see \reference{ref:CustomisingTheMainMenu}.
+
+\subsection{Manage Settings}
+The \setting{Manage Settings} option allows the saving and re-loading of user 
+configuration settings, browsing the hard drive for alternate firmwares, and finally
+resetting your \dap{} back to initial configuration.
+%
+The details of this menu are covered in
+\reference{ref:manage_settings}.
+
+\opt{recording}{\input{main_menu/recording_screen.tex}}
+
+\opt{radio}{\input{main_menu/fmradio.tex}}
+
+\section{\label{ref:playlistoptions}Playlists}
+  This menu provides easy access to the playlists residing in \fname{/Playlists} (or another
+  directory of your choice). Selecting a playlist will display its contents.
+  Playlists can be created, or the playlist directory can be changed, from the
+  \setting{Context Menu} (see \reference{ref:Contextmenu}).
+  To create a new playlist, you can also use the \setting{Save} option from the
+  \setting{Current Playlist} menu (see \reference{ref:WPS}).
+
+\subsection{\label{ref:playlistcatalogue_contextmenu}Playlists Context Menu}
+
+\begin{description}
+\item[View Current Playlist:]
+  Displays the contents of the current playlist.
+
+\item[Save Current Playlist:]
+  Saves the current playlist, excluding queued tracks, to the
+specified file. Asks for confirmation whether to remove queued tracks
+from the current playlist, so that bookmarks can be created
+(see \reference{ref:createbookmark}).
+
+\item[Create Playlist:]
+  Rockbox will create a playlist with all tracks from your player.
+
+\item[Reset Playlist Catalogue Directory:]
+  Will reset the default location for playlists to the \fname{/Playlists}
+directory.
+
+\end{description}
+
+\section{Plugins}
+  With this option you can load and run various plugins that have been
+written for Rockbox. There are a wide variety of these supplied with
+Rockbox, including several games, some impressive demos and a number of
+utilities. A detailed description of the different plugins is to be found in
+\reference{ref:plugins}.
+
+\section{\label{ref:Info}System}
+
+\begin{description}
+\item[Rockbox Info:]
+  Displays some basic system information. This is, from top to bottom,
+  the amount of memory Rockbox has available for storing music (the buffer).
+  The battery status.
+\opt{multivolume}{%
+  Memory size and amount of free space on the two data volumes, this info is
+  given separately for internal memory (\emph{Int}) and for a plugged in
+  memory card
+  \opt{sansa,e200v2,fuze,fuzev2,clipplus,clipzip}{(\emph{MSD})}.
+}%
+\nopt{multivolume}{Hard disk size and the amount of free space on the disk.}
+
+\item[Credits:]
+  Display the list of contributors.
+
+\item[Running Time:]
+  Shows the runtime of your \dap{} in hours, minutes and seconds.
+  \begin{description}
+    \item[Running Time:]
+        This item shows the cumulative overall runtime of your \dap{} since you 
+        either disconnected it from charging (in Rockbox) or manually 
+        reset this item. A manual reset is done through pressing any button, 
+        followed by pressing \ActionStdOk{}.
+    \item[Top Time:]
+        This item shows the cumulative overall runtime of your \dap{} since you 
+        last manually reset this item. A manual reset is done through pressing 
+        any button, followed by pressing \ActionStdOk{}.
+  \end{description}
+
+\item[Debug (Keep Out!):]
+  This sub menu is intended to be used \emph{only} by Rockbox developers.
+  It shows hardware, disk, battery status and other technical information.  
+  \warn{It is not recommended that users access this menu unless instructed to
+  do so in the course of fixing a problem with Rockbox. If you think you have 
+  messed up your settings by use of this menu please try to reset \emph{all} 
+  settings before asking for help.}
+\end{description}
+
+\opt{quickscreen}
+{
+\section{\label{ref:QuickScreen}Quick Screen}
+  \nopt{erosqnative}{
+    Although the \setting{Quick Screen} is accessible from nearly everywhere,
+    not just the \setting{Main Menu}, it is worth mentioning here.
+  }
+  \opt{erosqnative}{
+    On the \playertype{}, The \setting{Quick Screen} is only
+    available from the \setting{While Playing Screen} by default.
+  }
+  It allows rapid access to your four favourite settings.  The default settings are
+  \setting{Shuffle} (\reference{ref:PlaybackSettings}) and
+  \setting{Repeat} (\reference{ref:PlaybackSettings}), but almost all
+  configurable options in Rockbox can be placed on this screen.  To change the
+  options, navigate through the menus to the setting you want to add and press
+  \ActionStdContext.  In the menu which appears you will be given options
+  to place the setting on the \setting{Quick Screen}.
+  
+  Press
+  \nopt{erosqnative}{\ActionStdQuickScreen{}}
+  \opt{erosqnative}{\ActionWpsQuickScreen{}} to access it and \ActionQuickScreenExit{} to exit.
+  The direction buttons will modify the individual setting values as indicated 
+  by the arrow icons. Please note that the settings at opposite sides of the
+   screen cycle through the available options in opposite directions.
+   Therefore if you select the same setting at e.g. the top and bottom of the
+   quickscreen, then pressing up and down will cycle through this setting in
+   opposite directions.
+
+  \opt{ipod}{
+    \note{You can always adjust the sound volume on the QuickScreen.
+    To do so, slide your finger around the click wheel as you would on the
+    While Playing Screen.}
+  }
+
+  Press \ActionStdContext{} to access the \setting{Shortcuts Menu} directly from the
+  \setting{Quick Screen}.
+}
+
+\section{\label{ref:MainMenuShortcuts}Shortcuts}
+
+This menu item is a container for user defined shortcuts to files, folders or
+settings. With a shortcut,
+\begin{itemize}
+  \item A file can be ``run'' (i.e. a music file played, plugin started or
+        a \fname{.cfg} loaded)
+  \item The file browser can be opened with the cursor positioned at
+        a specified file or folder
+  \item A file's or folder's ``Playing Next...'' context menu item can
+        be displayed
+  \item A settings current value (any which can be added to the
+        \setting{Quick Screen})
+  \item A setting can be configured (any which can be added to the
+        \setting{Quick Screen})
+  \item A debug menu item can be displayed (useful for developers mostly)
+\opt{rtc}{
+  \item The current time can be spoken
+}
+  \item The sleep timer can be configured
+  \item The \dap{} can be turned off or rebooted
+\end{itemize}
+
+\note{Shortcuts into the database are not possible}
+
+Shortcuts are loaded from the file \fname{/.rockbox/shortcuts.txt} which lists
+each item to be displayed. Each shortcut looks like the following:
+
+\begin{example}
+    [shortcut]
+    type: <shortcut type>
+    data: <what the shortcut actually links to>
+    name: <what the shortcut should be displayed as>
+    icon: <number of the theme icon to use (see \wikilink{CustomIcons})>
+    talkclip: <full path to a talk clip to speak when voice menus are enabled> (example: \fname{/.rockbox/filename.talk})
+\end{example}
+
+Only ``type'' and ``data'' are required (except if type is ``separator'' in which case
+``data'' is also not required).
+
+Available types are:
+\begin{description}
+\item[file] \config{data} is the name of the file to ``run''
+\item[browse] \config{data} is the file or the folder to open the file browser at
+\item[playlist menu] \config{data} is the file or the folder to open the
+  ``Playing Next...'' context menu item on (see \reference{ref:playingnext_submenu})
+\item[setting] \config{data} is the config name of the setting you want to change
+  (see \reference{ref:config_file_options} for the list of the possible settings)
+\item[apply] \config{data} is the config name of the setting followed by ':' 
+  and the value you want applied. ex. 'data: volume: 20' would set the volume to 20 when selected
+  (see \reference{ref:config_file_options} for the list of the possible settings)
+\item[debug] \config{data} is the name of the debug menu item to display
+\item[separator] \config{data} is ignored; \config{name} can be used to display text,
+  or left blank to make the list more accessible with visual gaps
+\item[time] \config{data} needs to be \opt{rtc}{either ``talk'' to talk the time, or }``sleep X''
+  where X can, optionally, be the number of minutes to run the sleep timer for (0 to disable).
+  If ``sleep'' is not followed by a number, the sleep timer can be stopped, if running,
+  or started using the default duration; \config{name} will be ignored in that case.
+\item[shutdown] \config{data} is ignored; \config{name} can be used to display text
+\item[reboot] \config{data} is ignored; \config{name} can be used to display text
+\end{description}
+
+If the name/icon items are not specified, a sensible default will be used.
+
+\note{For the ``browse'' type, if you want the file browser to start \emph{inside}
+a folder, make sure the data has the trailing slash (i.e \fname{/Music/} instead of
+\fname {/Music}). Without the trailing slash, it will cause the file browser to open
+with \fname{/Music} selected instead.}
+
+The file \fname{shortcuts.txt} can be edited with any text editor. Most items can
+also be added to it through their context menu item ``Add to shortcuts''.
+A reboot is needed for manual changes to \fname{shortcuts.txt} to be applied.
+
+Shortcuts can be manually removed by selecting the one you wish to remove and pressing
+\ActionStdContext{}.

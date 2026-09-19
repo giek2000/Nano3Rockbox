@@ -1,0 +1,161 @@
+/***************************************************************************
+ *             __________               __   ___.
+ *   Open      \______   \ ____   ____ |  | _\_ |__   _______  ___
+ *   Source     |       _//  _ \_/ ___\|  |/ /| __ \ /  _ \  \/  /
+ *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
+ *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
+ *                     \/            \/     \/    \/            \/
+ *
+ * Copyright (C) 2003 Linus Nielsen Feltzing
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
+ * KIND, either express or implied.
+ *
+ ****************************************************************************/
+
+#include <stdio.h>
+#include "config.h"
+#include "menu.h"
+#include "icon.h"
+#include "radio.h"
+#include "lang.h"
+#include "settings.h"
+#include "presets.h"
+#include "exported_menus.h"
+#include "sound_menu.h" /* recording_menu()   */
+#include "talk.h"
+
+#ifdef HAVE_RECORDING
+#include "recording.h"  /* recording_screen() */
+
+#if defined(HAVE_FMRADIO_REC)
+#define FM_RECORDING_SCREEN
+static int fm_recording_screen(void)
+{
+    bool ret;
+
+    if (radio_get_current_frequency() == 0)
+        return 0;
+
+    /* switch recording source to FMRADIO for the duration */
+    int rec_source = global_settings.rec_source;
+    global_settings.rec_source = AUDIO_SRC_FMRADIO;
+    ret = recording_screen(true);
+
+    /* safe to reset as changing sources is prohibited here */
+    global_settings.rec_source = rec_source;
+
+    return ret;
+}
+
+MENUITEM_FUNCTION(recscreen_item, 0, ID2P(LANG_RECORDING),
+                  fm_recording_screen, NULL, Icon_Recording);
+#endif /* defined(HAVE_FMRADIO_REC) */
+
+#if defined(HAVE_FMRADIO_REC)
+#define FM_RECORDING_SETTINGS
+static int fm_recording_settings(void)
+{
+    int ret = recording_menu(true);
+
+    return ret;
+}
+
+MENUITEM_FUNCTION(recsettings_item, 0, ID2P(LANG_RECORDING_SETTINGS),
+                  fm_recording_settings, NULL, Icon_Recording);
+#endif /* defined(HAVE_FMRADIO_REC) */
+#endif /* HAVE_RECORDING */
+
+#ifndef FM_PRESET
+MENUITEM_FUNCTION(radio_presets_item, 0, ID2P(LANG_PRESET),
+                  handle_radio_presets, NULL, Icon_NOICON);
+#endif
+#ifndef FM_PRESET_ADD
+MENUITEM_FUNCTION(radio_addpreset_item, 0, ID2P(LANG_FM_ADD_PRESET),
+                  handle_radio_add_preset, NULL, Icon_NOICON);
+#endif
+
+MENUITEM_FUNCTION(presetload_item, 0, ID2P(LANG_FM_PRESET_LOAD),
+                  preset_list_load, NULL, Icon_NOICON);
+MENUITEM_FUNCTION(presetsave_item, 0, ID2P(LANG_FM_PRESET_SAVE),
+                  preset_list_save, NULL, Icon_NOICON);
+MENUITEM_FUNCTION(presetclear_item, 0, ID2P(LANG_FM_PRESET_CLEAR),
+                  preset_list_clear, NULL, Icon_NOICON);
+
+MENUITEM_SETTING(set_region, &global_settings.fm_region, NULL);
+MENUITEM_SETTING(force_mono, &global_settings.fm_force_mono, NULL);
+#if defined(HAVE_RDS_CAP) && defined(CONFIG_RTC)
+MENUITEM_SETTING(sync_rds_time, &global_settings.sync_rds_time, NULL);
+#endif
+
+#ifndef FM_MODE
+
+static char* get_mode_text(int selected_item, void * data,
+                           char *buffer, size_t buffer_len)
+{
+    int radio_mode = radio_get_mode();
+    (void)selected_item;
+    (void)data;
+    snprintf(buffer, buffer_len, "%s %s", str(LANG_MODE),
+             radio_mode ? str(LANG_PRESET) :
+                          str(LANG_RADIO_SCAN_MODE));
+    return buffer;
+}
+static int mode_speak_item(int selected_item, void * data)
+{
+    int radio_mode = radio_get_mode();
+    (void)selected_item;
+    (void)data;
+    long talk_ids[4];
+    talk_ids[0] = LANG_MODE;
+    talk_ids[1] = radio_mode != RADIO_SCAN_MODE? LANG_PRESET : LANG_RADIO_SCAN_MODE;
+    talk_ids[2] = TALK_FINAL_ID;
+    talk_idarray(talk_ids, true);
+    return 0;
+}
+static int toggle_radio_mode(void)
+{
+    int radio_mode = radio_get_mode();
+    radio_set_mode((radio_mode == RADIO_SCAN_MODE) ?
+                 RADIO_PRESET_MODE : RADIO_SCAN_MODE);
+    return 0;
+}
+MENUITEM_FUNCTION_DYNTEXT(radio_mode_item, 0, toggle_radio_mode,
+                          get_mode_text, mode_speak_item,
+                          NULL, NULL, Icon_NOICON);
+#endif
+
+MENUITEM_FUNCTION_W_PARAM(scan_presets_item, 0,
+                          ID2P(LANG_FM_SCAN_PRESETS),
+                          presets_scan, NULL, NULL, Icon_NOICON);
+
+MAKE_MENU(radio_settings_menu, ID2P(LANG_FM_MENU), NULL,
+            Icon_Radio_screen,
+#ifndef FM_PRESET
+            &radio_presets_item,
+#endif
+#ifndef FM_PRESET_ADD
+            &radio_addpreset_item,
+#endif
+            &presetload_item, &presetsave_item, &presetclear_item,
+            &force_mono,
+#ifndef FM_MODE
+            &radio_mode_item,
+#endif
+            &set_region, &sound_settings,
+#ifdef FM_RECORDING_SCREEN
+            &recscreen_item,
+#endif
+#ifdef FM_RECORDING_SETTINGS
+            &recsettings_item,
+#endif
+#if defined(HAVE_RDS_CAP) && defined(CONFIG_RTC)
+            &sync_rds_time,
+#endif
+            &scan_presets_item);
+

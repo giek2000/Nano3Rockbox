@@ -1,0 +1,245 @@
+\subsection{PictureFlow}
+\screenshot{plugins/images/ss-pictureflow}{PictureFlow}{img:pictureflow}
+PictureFlow is a visual browser for your albums.  After you've selected something to play,
+PictureFlow will continue running by default, or can optionally show the WPS. Using
+the context menu, songs can be added to the dynamic playlist or other playlists directly
+from PictureFlow (see \reference{ref:playingnext_submenu}).
+Various metadata, such as format, length or year of an album or its songs can also be
+displayed.
+
+
+\subsubsection{Sort Options}
+Albums can be sorted by:
+
+\begin{itemize}
+    \item Name
+    \item Year
+    \item Album Artist + Name
+    \item Album Artist + Year
+\end{itemize}
+
+\subsubsection{Requirements}
+PictureFlow uses both the album art (see \reference{ref:album_art}) and
+database (see \reference{ref:database}) features of Rockbox.
+These need to be working correctly before PictureFlow can be used.
+\textbf{PictureFlow does not support embedded album art.}
+
+\opt{tc_ramcache}{\note{It is strongly recommended you enable the database's "Load to RAM" feature
+(and restart your player afterwards)! See \reference{ref:databasemenu}. This will \textbf{vastly} speed up
+building the album index as well as loading of track titles when browsing albums.}}
+
+\opt{dircache}{\note{Enabling the disk's directory cache – see \reference{ref:dircache} – noticeably
+reduces the time it takes for cover art to be displayed.}}
+
+
+  \begin{itemize}
+    \item PictureFlow needs to build an album index the first time it's launched
+    (Cancel/Quit by pressing \ActionStdCancel{} or \ActionStdMenu{}) and then writes an album art cache to disk.
+    During the latter (5th step), press any button to skip past the progress bar screen and
+    to start browsing immediately. Processing of album art will continue in the
+    background. An indicator in the screen corner shows you the completed percentage.
+    When the cache is being built, the UI may be slow to react to your input.
+    For optimal performance, wait for processing to complete.
+    \item Each time you update your player's database, you should also update the cache
+    in PictureFlow.
+    \item PictureFlow will accept album art larger than the dimensions of the
+    screen, but the larger the dimensions, the longer they will take to scale.
+  \end{itemize}
+
+\subsubsection{Keys}
+    \begin{btnmap}
+        \opt{scrollwheel,IRIVER_H10_PAD,PBELL_VIBE500_PAD,MPIO_HD300_PAD}{%
+            \ActionStdPrev{} / \ActionStdNext
+                &
+            \opt{HAVEREMOTEKEYMAP}{
+                &}
+            Scroll through albums / track list
+                \\
+        }
+
+        % only scroll wheel and `strip' targets use the same action in album and track list
+        \nopt{scrollwheel,IRIVER_H10_PAD,PBELL_VIBE500_PAD,MPIO_HD300_PAD}{%
+            % currently the M3 does not use buttons of the main unit which has no display
+            \nopt{IAUDIO_M3_PAD,MPIO_HD200_PAD,touchscreen}{\ButtonLeft{} / \ButtonRight{}}
+            \opt{MPIO_HD200_PAD}{FIXME}
+            \opt{touchscreen}{\TouchMidLeft{} / \TouchMidRight}
+                &
+            \opt{HAVEREMOTEKEYMAP}{
+                \opt{IAUDIO_M3_PAD,GIGABEAT_RC_PAD}{\ActionRCStdPrev{} / \ActionRCStdNext}
+                &}
+            Scroll through albums
+                \\
+
+            \nopt{IAUDIO_M3_PAD}{\ActionStdPrev{} / \ActionStdNext}
+                &
+            \opt{HAVEREMOTEKEYMAP}{
+                % even though the M3 uses an Iaudio remote, mapping differs when used with M/X5
+                \opt{IAUDIO_M3_PAD}{\ButtonRCLeft{} / \ButtonRCRight}
+                \opt{GIGABEAT_RC_PAD}{\ButtonRCVolUp{} / \ButtonRCVolDown}
+                &}
+            Scroll through track list
+                \\
+        }
+
+        \opt{FIIO_M3K_PAD}{
+                \ButtonLeft{} / \ButtonRight{}
+                &
+                \opt{HAVEREMOTEKEYMAP}{&}
+                Quickly jump to another album (alphabetically or by year) /
+                browse through albums from track list
+                \\
+        }
+        \opt{IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}{
+                \ButtonLeft{} / \ButtonRight{}
+                &
+                \opt{HAVEREMOTEKEYMAP}{&}
+                Quickly jump to another album (alphabetically or by year)
+                \\
+        }
+        \opt{FIIO_M3K_PAD,IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}{
+                \opt{FIIO_M3K_PAD}{\ButtonVolUp{} / \ButtonVolDown}
+                \opt{IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}{
+                     \ButtonSelect{} + \ButtonMenu{} / \ButtonSelect{} + \ButtonPlay
+                }
+                &
+                \opt{HAVEREMOTEKEYMAP}{&}
+                Adjust current album sorting
+                \\
+        }
+
+        \nopt{IAUDIO_M3_PAD}{%
+            \nopt{IRIVER_H10_PAD,touchscreen,PBELL_VIBE500_PAD%
+                 ,SANSA_FUZE_PAD,MPIO_HD200_PAD,MPIO_HD300_PAD,SAMSUNG_YH92X_PAD%
+                 ,SAMSUNG_YH820_PAD,XDUOO_X3_PAD,RG_NANO_PAD}
+                 {\ButtonSelect}
+            \opt{IRIVER_H10_PAD,PBELL_VIBE500_PAD}{\ButtonRight}
+            \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonFF}
+            \opt{touchscreen}{\TouchCenter}
+            \opt{SANSA_FUZE_PAD}{\ButtonRight}
+            \opt{MPIO_HD200_PAD}{\ButtonFunc}
+            \opt{MPIO_HD300_PAD}{\ButtonEnter}
+            \opt{XDUOO_X3_PAD}{\ButtonPlay}
+            \opt{RG_NANO_PAD}{\ButtonA}
+        }
+            &
+        \opt{HAVEREMOTEKEYMAP}{
+            \opt{IAUDIO_M3_PAD}{\ButtonRCPlay}
+            \opt{GIGABEAT_RC_PAD}{\ButtonRCFF}
+            &}
+        Enter track list
+            \nopt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{%
+            / Play album from selected track}
+            \\
+        % Ondio & Samsung YH use a different button in album list and track list
+        \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{%
+            \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonPlay}
+                &
+            Play album from selected track in track list
+                \\
+        }
+
+        \nopt{IAUDIO_M3_PAD,MPIO_HD200_PAD,MPIO_HD300_PAD,touchscreen,SANSA_FUZEPLUS_PAD,%
+        FIIO_M3K_PAD}{\ButtonLeft}
+        \opt{MPIO_HD200_PAD}{\ButtonRec}
+        \opt{MPIO_HD300_PAD}{\ButtonMenu}
+        \opt{SANSA_FUZEPLUS_PAD}{\ButtonLeft{} or \ButtonBack}
+        \opt{FIIO_M3K_PAD}{\ButtonBack}
+        \opt{touchscreen}{
+            \opt{COWON_D2_PAD}{\ButtonPower{} or}
+            \TouchBottomRight}
+            &
+        \opt{HAVEREMOTEKEYMAP}{
+            \opt{IAUDIO_M3_PAD,GIGABEAT_RC_PAD}{\ActionRCStdCancel}
+            &}
+        Exit track list
+            \\
+
+        \ActionStdContext
+            &
+        \opt{HAVEREMOTEKEYMAP}{&}
+        Enter context menu
+            \\
+
+        \nopt{IAUDIO_M3_PAD,SANSA_FUZEPLUS_PAD,FIIO_M3K_PAD%
+              ,IPOD_4G_PAD,IPOD_3G_PAD}{\ActionStdMenu}
+        \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{or \ButtonRew}
+    	\opt{IPOD_4G_PAD,IPOD_3G_PAD}{Long \ButtonMenu}
+        \opt{SANSA_FUZEPLUS_PAD}{Long \ButtonSelect}
+        \opt{FIIO_M3K_PAD}{\ButtonPower}
+            &
+        \opt{HAVEREMOTEKEYMAP}{
+            \opt{IAUDIO_M3_PAD,GIGABEAT_RC_PAD}{\ActionRCStdMenu}
+            &}
+        Enter menu
+            \\
+
+        \nopt{IAUDIO_M3_PAD}{%
+            \opt{IRIVER_H100_PAD,IRIVER_H300_PAD}{\ButtonOff}
+            \opt{IAUDIO_X5_PAD,GIGABEAT_PAD,GIGABEAT_S_PAD,SANSA_E200_PAD,SANSA_CLIP_PAD%
+                ,MROBE100_PAD,SANSA_FUZEPLUS_PAD}{\ButtonPower}
+            \opt{SANSA_C200_PAD,IRIVER_H10_PAD}{Long \ButtonPower}
+            \opt{IPOD_4G_PAD,IPOD_3G_PAD}{\ActionStdMenu}
+            \opt{SANSA_FUZE_PAD}{Long \ButtonHome}
+            \opt{PBELL_VIBE500_PAD}{\ButtonRec}
+            \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{long \ButtonRew}
+            \opt{MPIO_HD200_PAD}{FIXME}
+            \opt{MPIO_HD300_PAD}{Long \ButtonMenu}
+            \opt{FIIO_M3K_PAD}{\ButtonBack}
+            \opt{RG_NANO_PAD}{\ButtonB}
+            \opt{touchscreen}{
+                \opt{COWON_D2_PAD}{Long \ButtonPower{} or}
+                \TouchBottomRight{} (in album view)}
+        }
+            &
+        \opt{HAVEREMOTEKEYMAP}{
+            \opt{IAUDIO_M3_PAD}{\ButtonRCRec}
+            \opt{GIGABEAT_RC_PAD}{\ButtonRCRew}
+            &}
+        Exit PictureFlow
+            \\
+
+    \end{btnmap}
+
+\subsubsection{Main Menu}
+\begin{description}
+  \item[Sort albums by.] Change the sorting of albums in PictureFlow.
+  \item[Show Tracks While Browsing.] Scroll through albums from their track list.
+  \item[Go to Last Album.] Go to selected album when PictureFlow was last quit or the sorting changed.
+  \item[Go to WPS.] Leave PictureFlow and enter the While Playing Screen.
+  \item[Playback Control.] Control music playback from within the plugin.
+  \item[Rebuild cache.] Creates a fresh album index and builds the artwork cache from scratch.
+  \item[Update cache.] Creates a fresh album index and updates the existing artwork cache to
+  include newly added albums.
+  \item[Settings.] Enter the settings menu.
+  \item[Quit.] Exit PictureFlow plugin.
+\end{description}
+
+\subsubsection{Settings Menu}
+
+\begin{description}
+  \item[Show album title.] Allows setting the album title / artist to be
+  shown above or below the cover art, or not at all.
+  \item[Show year in album title.] Set whether a year will be displayed next to each album
+  title (determined by the release year of the latest track on an album).
+  \item[Year sort order.] Determines whether albums are sorted in ascending or descending
+  order, when sorting by year.
+  \item[WPS integration.] Integrate PictureFlow with the While Playing Screen.
+  \item[Display.] Enter the Display settings menu.
+\end{description}
+
+\subsubsection{Display Settings Menu}
+
+\begin{description}
+  \item[Backlight.] Force backlight on while running pictureflow.
+  \item[Display FPS.] Displays frames per second on screen.
+  \item[Spacing.] The distance between the front edges of the side slides, i.e. changes
+  the degree of overlap of the side slides. A larger number means less overlap. Scales with zoom.
+  \item[Centre margin.] The distance, in screen pixels, with zoom at 100, between
+  the centre and side slides. Scales with zoom.
+  \item[Number of slides.] Sets the number of slides at each side, including the
+  centre slide. Therefore if set to 4, there will be 3 slides on the left,
+  the centre slide, and then 3 slides on the right.
+  \item[Zoom.] Changes the distance at which slides are rendered from the ``camera''.
+  \item[Resize Covers.] Set whether to automatically resize the covers or to leave
+  them at their original size.
+\end{description}

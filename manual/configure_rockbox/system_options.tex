@@ -1,0 +1,906 @@
+\section{\label{ref:SystemOptions}System}
+
+\nopt{sansa,fuzeplus,rgnano}%will probably be there on Sansas one day -  exclude it the simple way without specific option
+{\nopt{sansaAMS}{
+  \subsection{Battery}
+  Options relating to the battery
+  in the \dap.
+  \begin{description}
+    \nopt{erosqnative}
+    {
+      \item [Battery Capacity.] This setting can be used to tell Rockbox what
+        capacity (in mAh) the battery being used has. The default is
+        \opt{vibe500}{1000~mAh}%
+        \opt{iriverh100,iriverh300}{1300~mAh}%
+        \opt{mpiohd200}{850~mAh}%
+        \opt{ipodmini}{400~mAh (1G) or 630~mAh (2G)}%
+        \opt{ipodcolor}{700~mAh}%
+        \opt{ipodnano}{300~mAh}%
+        \opt{ipodvideo}{400~mAh (30~GB) or 600~mAh (60~GB and 80~GB)}%
+        \opt{ipod4g}{630~mAh}%
+        \opt{ipod3g}{630~mAh}%
+        \opt{ipod1g2g}{1200~mAh}%
+        \opt{iaudiom3,iaudiom5,iaudiox5}{950~mAh}%
+        \opt{gigabeatf}{2000~mAh}%
+        \opt{gigabeats}{700~mAh}%
+        \opt{cowond2}{1600~mAh}%
+        \opt{mrobe100}{720~mAh}%
+        \opt{samsungyh920,samsungyh925}{900~mAh}%
+        \opt{samsungyh820}{650~mAh}%
+        \opt{xduoox3}{2000~mAh}%
+        , which is the capacity value for the standard battery shipped with the \dap.
+          Rockbox uses this value for runtime estimation, not battery percentage
+          calculation. Changing this setting has no effect whatsoever on
+          actual battery life. This setting only affects the accuracy of the
+          runtime estimation as shown on screen.
+        \opt{iaudiom3,iaudiom5,iaudiox5}{Rockbox does not automatically distinguish
+          between the ``L'' models and the ``simple'' models which determine the
+          default value. If your \dap{} is an
+              \opt{iaudiom3}{M3L}%
+              \opt{iaudiom5}{M5L}%
+              \opt{iaudiox5}{X5L}
+          set the value to 2250~mAh for more accuracy in the runtime estimation.}
+        \opt{ipod,sansa}{This value is fairly meaningless in the \playerman{}
+          family at present, and work is on-going into finding a better way to
+          determine battery life.}
+    }
+
+      \opt{usb_charging_enable}{
+      \item [Charge During USB Connection.] This option lets you control whether
+        the \dap{} should charge during the USB connection and hence draw the
+        full 500~mA. Turning it \setting{Off} is recommended if the \dap{} is
+        connected through an unpowered USB hub or a laptop port. To use a USB
+        AC adapter, select \setting{Force} to instruct the \dap{} to also
+        charge when USB power is available but no connection is established.
+      }
+
+     \end{description}
+}}
+\opt{dircache,HAVE_DISK_STORAGE}{
+\subsection{Disk}
+    Options relating to the hard disk.
+
+  \begin{description}
+    \opt{HAVE_DISK_STORAGE}{
+    \item [Disk Spindown.] Rockbox has a timer that makes it spin down the
+      hard disk after it is idle for a certain amount of time. This setting
+      controls the amount of time between the last user activity and the time
+      that the disk spins down. This idle time is only affected by user
+      activity, like navigating through the \setting{File Browser}. When the
+      hard disk spins up to fill the audio buffer, it automatically spins down
+      afterwards.
+    }
+
+    \opt{dircache}{
+    \label{ref:dircache}
+    \item [Directory Cache.] Rockbox has the ability to cache the contents of
+      your drive in RAM. The \setting{Directory Cache} takes a small amount of
+      memory away from Rockbox that would otherwise be used to buffer music,
+      but it speeds up navigation in the file browser by eliminating
+      the slight pause between the time a navigation button is pressed and the
+      time Rockbox responds. Turning this setting on activates the
+      directory cache, and turning it off deactivates the directory
+      cache.
+      \note{The first time you enable the directory cache,
+      Rockbox will request a reboot of the \dap{} and upon restarting take a few
+      minutes to scan the drive. After this, the directory cache will work in the
+      background.}
+    }
+  \end{description}
+} % \opt{dircache,HAVE_DISK_STORAGE}
+
+\subsection{Limits}
+This sub menu relates to limits in the Rockbox operating system.
+  \begin{description}
+    \item [Max Entries in File Browser.] This setting controls the limit on
+    the number of files that you can see in any particular directory in the
+    file browser. \opt{HAVE_DISK_STORAGE}{Higher values will shorten the music
+    buffer, which can negatively affect battery life by forcing the disk to
+    spin up more often. Increase this setting \emph{only} if you need to.}
+
+    \note{This setting also affects the maximum number of tracks that can
+    be handled by the database browser. If you find that long lists are not
+    being sorted correctly in the database browser you may need to increase
+    this setting.}
+
+    \item [Max Playlist Size.] This setting controls the maximum size of
+    a playlist. The playlist size can be between 1,000 and 32,000 files,
+    in steps of 1,000 (default is 10,000). \opt{HAVE_DISK_STORAGE}{Higher
+    values will shorten the music buffer, which can negatively affect
+    battery life by forcing the disk to spin up more often. Increase this
+    setting \emph{only} if you use very large playlists.}
+
+    \item [Glyphs To Cache.] This sets the default memory allocation size
+    for fonts in unique glyphs. This should be set to the number of unique
+    language glyphs and punctuation marks that are frequently displayed.
+    The default is 250.
+  \end{description}
+  \note{You will need to restart your player for changes to \setting{Max
+    Entries in File Browser} or \setting{Max Playlist Size} to take effect
+    while \setting{Glyphs To Cache} will affect the next font load.}
+% TODO: this needs to be rewritten in another style, it lets you mix sound from another source into the music
+  \nopt{erosqnative,rgnano}
+  {
+    \subsection{Line In} This option activates the line-in port on \dap, which is
+      off by default. This is useful for such applications as:
+      \begin{itemize}
+      \item Game boy $\rightarrow$ \dap $\rightarrow$ human
+      \item laptop $\rightarrow$ \dap $\rightarrow$ human
+      \item LAN party computer $\rightarrow$ \dap $\rightarrow$ human
+      \end{itemize}
+  }
+\opt{perceptual_volume}{
+  \subsection{Volume Adjustment Mode}
+  This setting selects the method used to adjust volume. In \setting{Direct}
+  mode each volume step changes the volume by a fixed number of decibels (dB).
+
+  In \setting{Perceptual} mode, the hardware volume range is divided into a
+  number of steps, controlled by the \setting{Number of Volume Steps} option.
+  Each step changes the volume by a variable number of decibels (dB) so the
+  perceived loudness changes by about the same amount at each step. The dB
+  change is smaller at high volumes and larger at low volumes, so a large
+  range of low volumes are effectively compressed into a smaller number of
+  volume steps.
+
+  \setting{Volume Adjustment Mode} does not affect how volume is displayed by
+  themes.
+}
+\opt{quickscreen}{
+  \subsection{Use Shortcuts Menu Instead of Quick Screen} This option
+  activates the shortcuts menu instead of opening the quick screen when enabled.
+}
+\opt{HAVE_CAR_ADAPTER_MODE}{
+\subsection{Car Adapter Mode}
+      This option turns \setting{On} and \setting{Off} the car ignition
+      auto stop function.
+  \begin{description}
+  \item [Car Adapter Mode.] When using the \dap{} in a car,
+  \setting{Car Adapter Mode} automatically stops playback on the \dap{} when
+  power (i.e. from cigarette lighter power adapter) to the external DC in jack
+  is turned off. If the \setting{Car Adapter Mode} is set to \setting{On},
+  Rockbox will pause playback when the external power off condition is
+  detected. Rockbox will then shutdown the \dap{} after the length of time set
+  in the \setting{Idle Poweroff} setting
+  (see \reference{ref:IdlePoweroffSetting}).
+  If power to the DC in jack is turned back on before the \emph{Idle Poweroff}
+  function has shut the \dap{} off, playback will be resumed after
+  \setting{Car Adapter Mode Delay} seconds after the power is applied.
+  This delay is to allow for the time while the car engine is being started.
+  \end{description}
+
+  Once the \dap{} is shut off either manually, or automatically with the
+  \setting{Idle Poweroff} function, it must be powered up manually to resume
+  playback.
+
+\subsection{Car Adapter Mode Delay}
+  This option specifies
+  the time between power being applied and playback resuming
+  \begin{description}
+  \item [Car Adapter Mode Delay.]  As different car headunits take
+    varying amounts of time to start up, the \setting{Car Adapter Mode Delay}
+    is configurable between 5 and 30 seconds, in 5 second increments.
+  \end{description}
+}
+
+\opt{accessory_supply}{
+\subsection{\label{ref:AccessoryPowerSupply}Accessory Power Supply}
+This option turns the accessory power supply \setting{On} and \setting{Off}.
+The Apple accessory protocol has been partially implemented in Rockbox, and
+thus there is a reasonable chance that your favourite accessory will work.
+The accessory may require power from the \dap{} to function, and if so you should turn
+this option \setting{On}. If it is not required, then turning this setting
+\setting{Off} will save battery and therefore result in better runtime.
+}
+
+\opt{lineout_poweroff}{
+\subsection{\label{ref:LineoutOnOff}Line Out}
+This option turns the \dap{}'s line-out \setting{On} and \setting{Off}. On some
+devices an enabled line-out will consume some power even if not used. If it is
+not required, then turning this setting \setting{Off} will save battery and
+therefore result in better runtime.
+}
+
+\opt{HAVE_BUTTON_LIGHTS}{
+  \opt{e200,e200v2}{
+  \subsection{Wheel Light Timeout}
+    This setting controls the amount of time the wheel lights shine after a
+    button press or wheel turn. If set to \setting{Off}, the LEDs will not
+    light when a button is pressed. If set to \setting{On}, the lights will
+    never shut off. If set to a time (1 to 120 seconds), the wheel will stay
+    lit for that amount of time after a button press or wheel turn.
+  }
+  \nopt{e200,e200v2}{
+  \subsection{Button Light Timeout}
+    This setting controls the amount of time the button lights shine after a
+    button press. If set to \setting{Off}, the LEDs will not light when a
+    button is pressed. If set to \setting{On}, the lights will never shut off.
+    If set to a time (1 to 120 seconds), the buttons will stay lit for
+    that amount of time after a button press.
+  }
+  \opt{gigabeatf}{
+    \subsection{Button Light Brightness}
+      Changes the brightness of the button lights.
+  }
+}
+
+\subsection{Keyclick}
+  This menu controls key clicks on button presses.
+  \begin{description}
+  \opt{hardware_click}{
+    \item [Headphone Keyclick. ]This setting controls how strong the keyclicks
+      played through the headphones are. If set to \setting{Off}, the keyclicks
+      will be disabled.
+    \item [Speaker Keyclick. ]This setting turns playing of keyclicks through
+      the built in speaker \setting{On} or \setting{Off}.
+  }
+  \nopt{hardware_click}{
+    \item [Keyclick. ]This setting controls how strong the keyclicks are.
+      If set to \setting{Off}, the keyclicks will be disabled.
+  }
+  \item [Keyclick repeats.] This setting turns keyclick repeats \setting{On}
+    and \setting{Off}. If set to \setting{On}, the keyclicks will be
+    repeated when you hold down a button. If set to \setting{Off}, you will
+    hear only one click.
+  \end{description}
+
+\opt{touchpad}{
+  \subsection{Touchpad}
+    These settings control the functions of touchpad devices.
+    \begin{description}
+    \opt{SANSA_FUZEPLUS_PAD,GIGABEAT_PAD}{
+      \item [Touchpad Sensitivity. ]This setting controls the amount of pressure needed to
+      register a touchpad press. If set to \opt{SANSA_FUZEPLUS_PAD}{\setting{25}}\opt{GIGABEAT_PAD}
+      {\setting{High}} the lightest touch will register. If set to \opt{SANSA_FUZEPLUS_PAD}
+      {\setting{$-25$}}\opt{GIGABEAT_PAD}{\setting{Normal}} a firmer press will be needed to register
+      on the touchpad.
+    }
+    \end{description}
+    \begin{description}
+    \opt{touchpad_deadzone}{
+      \item [Touchpad Deadzone. ]This setting controls the size of a configurable deadzone
+      where touch events between virtual keys are ignored.  If set to \opt{SANSA_FUZEPLUS_PAD}
+      {\setting{0}} there is effectively no deadzone. If set to \opt{SANSA_FUZEPLUS_PAD}
+      {\setting{100}} the deadzones between each virtual button are set to a maximuim
+      400px.
+    }
+    \end{description}
+}
+
+
+
+
+\nopt{hold_button}{
+  \subsection{Advanced Key Lock}
+    This option allows users to select actions that when within WPS or FMS will \emph{not} be
+    blocked by the key lock (software hold switch).
+
+
+        \begin{description}
+        \item[Enabled.]
+        Enables/disables the feature.
+
+        \item[Settings.]
+        Allows to select actions that will \emph{not} be blocked by the key lock.
+                \begin{itemize}
+                \item[Exempt Volume]
+                Volume up/down.
+                \item[Exempt Play]
+                Toggling Play/Pause.
+                \item[Exempt Seek]
+                Seeking in a track.
+                \item[Exempt Skip]
+                Skipping of a track.
+                \opt{HAVE_BACKLIGHT}{
+                \item[Autolock On]
+                When the backlight turns off, softlock will lock the screen,
+                activates when you press the lock key and if you manually lock
+                again, while active it then disables autolock.
+                \begin{itemize}
+                        \item
+                        (Lock Button Pressed \#1) >Auto Lock On
+                            (device still unlocked till backlight timeout).
+                        \item
+                        (Lock Button Pressed \#2) >Auto Lock Off (device locked).
+                        \item
+                        (Lock Button Pressed \#3) >(device unlocked).
+                \end{itemize}
+                \item[Always Autolock]
+                Force Autolock to always be active rather than cycling through the
+                list above. The device can be locked and unlocked manually, but
+                the lock will always engage when the backlight turns off. Requires
+                Autolock On to be enabled.
+                } %\opt{HAVE_BACKLIGHT}
+                \opt{touchpad}{
+                \item[Disable Touch.]
+                 Blocks touch screen buttons like the original.
+                }
+                \item[Disable Locked Reminders]
+                Suppresses the notification 'Buttons Locked'
+                    (still will if power button is pressed).
+                \note{This is a pre-requisite for \setting{selectivebacklight}
+                \reference{ref:Displayoptions} to work also during key lock.}
+                \item[Disable All Lock Notifications]
+                Disable all softlock notifications, including when power button
+                is pressed.
+                \note{When this is enabled, Disable Locked Reminders is still required to
+                be enabled for \setting{selectivebacklight} \reference{ref:Displayoptions}
+                to work during key lock.}
+
+                \end{itemize}
+        Selected actions are indicated by a leading +.
+        Note: If all options get de-selected, the entire feature is disabled.
+
+        \end{description}
+} %\nopt{hold_button}
+
+
+\subsection{USB}
+    Options relating to USB.
+
+  \begin{description}
+    \opt{usb_hid}{
+      \item[\label{ref:USB_HID}USB HID]
+        This option turns the USB HID feature \setting{On} and \setting{Off}.
+        When this feature is enabled, the \dap{} enumerates as a Human Interface
+        Device (HID), composed of several HID sub devices.
+        Since the \dap{} also enumerates as a Mass Storage Device, it becomes a USB
+        Composite Device, which contains both these devices.
+      \item[USB Keypad Mode]
+        This setting control the keypad mode when the \dap{} is attached to a
+        computer through USB. Pressing a key on the \dap{} sends a keystroke the
+        computer the \dap{} is attached to, according to the mapping set by the
+        keypad mode. There are different modes which provide different
+        functionality.
+        \opt{SANSA_E200_PAD,GIGABEAT_S_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD%
+            ,IRIVER_H10_PAD,IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD,MROBE100_PAD%
+            ,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD%
+            ,SAMSUNG_YH820_PAD,XDUOO_X3_PAD}{%
+        Switching modes back and forth is done by pressing the
+            \opt{SANSA_E200_PAD,SANSA_C200_PAD}{\ButtonRec}%
+            \opt{GIGABEAT_S_PAD,SANSA_CLIP_PAD,MROBE100_PAD,IRIVER_H10_PAD,SANSA_FUZEPLUS_PAD}%
+                {\ButtonPower}%
+            \opt{IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}{\ButtonSelect+\ButtonRight}
+            \opt{PBELL_VIBE500_PAD}{\ButtonOK+\ButtonLeft}
+            \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRec+\ButtonRew}
+        and
+            \opt{SANSA_E200_PAD,SANSA_C200_PAD}{Long \ButtonRec}%
+            \opt{GIGABEAT_S_PAD,SANSA_CLIP_PAD,MROBE100_PAD,IRIVER_H10_PAD,SANSA_FUZEPLUS_PAD}
+                {Long \ButtonPower}%
+            \opt{IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}{\ButtonSelect+\ButtonLeft}
+            \opt{PBELL_VIBE500_PAD}{\ButtonOK+\ButtonRight}
+            \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRec+\ButtonFF}
+            \opt{XDUOO_X3_PAD}{\ButtonOption+\ButtonNext{} or \ButtonOption+\ButtonPrev}
+        keys, respectively.%
+        }%
+        \opt{HAVEREMOTEKEYMAP}{
+        Remote %
+            \opt{GIGABEAT_RC_PAD}{\ButtonRCDsp / Long \ButtonRCDsp}%
+            \opt{MROBE100_RC_PAD}{\ButtonRCMode / Long \ButtonRCMode}
+        can also be used to switch modes.%
+        }%
+        \newline\newline
+        The following modes are available:
+        \begin{description}
+    
+            \item [Multimedia.] This mode lets you control the volume, playback,
+            and skips tracks on the host computer. It is equivalent for the
+            multimedia keys found on top of some multimedia keyboards.
+    
+                \begin{btnmap}
+                    % Volume up / down
+                    \opt{SANSA_E200_PAD,IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}
+                        {\ButtonScrollFwd{} / \ButtonScrollBack}
+                    \opt{SANSA_FUZEPLUS_PAD}{\ButtonUp{} / \ButtonDown;}
+                    \opt{GIGABEAT_S_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,SANSA_FUZEPLUS_PAD,XDUOO_X3_PAD}
+                        {\ButtonVolUp{} / \ButtonVolDown}
+                    \opt{IRIVER_H10_PAD}{\ButtonScrollUp{} / \ButtonScrollDown}
+                    \opt{MROBE100_PAD,PBELL_VIBE500_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD%
+                        }{\ButtonUp{} / \ButtonDown}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD,MROBE100_RC_PAD}
+                            {\ButtonRCVolUp{} / \ButtonRCVolDown}%
+                        &}
+                    Volume up / down, respectively
+                    \\
+    
+                    % Volume mute
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,IPOD_4G_PAD%
+                        ,IPOD_3G_PAD,IPOD_1G2G_PAD,MROBE100_PAD}{\ButtonSelect}
+                    \opt{GIGABEAT_S_PAD,SANSA_FUZEPLUS_PAD}{\ButtonSelect; \ButtonBack}
+                    \opt{IRIVER_H10_PAD}{\ButtonFF}
+                    \opt{IRIVER_VIBE500_PAD}{\ButtonMenu}
+                    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRight}
+                    \opt{XDUOO_X3_PAD}{\ButtonPower}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD}{Long \ButtonRCFF}%
+                        \opt{MROBE100_RC_PAD}{\ButtonRCHeart}%
+                        &}
+                    Volume mute
+                    \\
+    
+                    % Playback play / pause
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD}{\ButtonUp}
+                    \opt{IRIVER_H10_PAD,IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD%
+                        ,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD%
+                        ,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD,XDUOO_X3_PAD}{\ButtonPlay}
+                    \opt{GIGABEAT_S_PAD}{\ButtonPlay; \ButtonUp}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD}{\ButtonRCPlay}%
+                        \opt{MROBE100_RC_PAD}{\ButtonRCPlay}%
+                        &}
+                    Play / Pause
+                    \\
+    
+                    % Playback stop
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD}{\ButtonPower}
+                    \opt{GIGABEAT_S_PAD}{\ButtonMenu; \ButtonDown}
+                    \opt{SANSA_CLIP_PAD}{\ButtonHome}
+                    \opt{IRIVER_H10_PAD}{\ButtonRew; Long \ButtonPlay}
+                    \opt{IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}
+                        {\ButtonMenu; Long \ButtonPlay}
+                    \opt{SANSA_FUZEPLUS_PAD}{Long \ButtonPlay}
+                    \opt{PBELL_VIBE500_PAD}{\ButtonCancel; Long \ButtonPlay}
+                    \opt{MROBE100_PAD}{\ButtonDisplay; Long \ButtonPlay}
+                    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonLeft}
+                    \opt{XDUOO_X3_PAD}{\ButtonHome}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD}{Long \ButtonRCPlay}%
+                        \opt{MROBE100_RC_PAD}{\ButtonRCDisplay; Long \ButtonRCPlay}%
+                        &}
+                    Stop
+                    \\
+    
+                    % Scan previous track
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,%
+                        IRIVER_H10_PAD,IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD%
+                        ,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD}
+                        {\ButtonLeft}
+                    \opt{GIGABEAT_RC_PAD}{\ButtonPrev; \ButtonLeft}%
+                    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRew}
+                    \opt{XDUOO_X3_PAD}{\ButtonPrev}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                    \opt{GIGABEAT_RC_PAD,MROBE100_RC_PAD}{\ButtonRCRew}%
+                        &}
+                    Scan previous track
+                    \\
+    
+                    % Scan next track
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD%
+                        ,IRIVER_H10_PAD,IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD%
+                        ,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD}
+                        {\ButtonRight}
+                    \opt{GIGABEAT_RC_PAD}{\ButtonNext; \ButtonRight}%
+                    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonFF}
+                    \opt{XDUOO_X3_PAD}{\ButtonNext}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD,MROBE100_RC_PAD}{\ButtonRCFF}%
+                        &}
+                    Scan next track
+                    \\
+                \end{btnmap}
+    
+            \item [Presentation.] This mode lets you control a presentation program
+            (e.g. OpenOffice Impress, and some other popular application), making
+            the \dap{} a wired remote control device. This mode is can be useful
+            for lecturers who does not have a wireless remote control for this
+            purpose.
+    
+                \begin{btnmap}
+                    % Slideshow start
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD}{\ButtonUp}
+                    \opt{GIGABEAT_S_PAD}{\ButtonPlay; \ButtonUp}
+                    \opt{IRIVER_H10_PAD,IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD%
+                        ,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD%
+                        ,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonPlay}
+                    \opt{XDUOO_X3_PAD}{\ButtonPower}%
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD,MROBE100_RC_PAD}{\ButtonRCPlay}%
+                        &}
+                    Slideshow start
+                    \\
+    
+                    % Slideshow leave
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD}{\ButtonPower}
+                    \opt{GIGABEAT_S_PAD}{Long \ButtonPlay; Long \ButtonUp}
+                    \opt{SANSA_CLIP_PAD}{\ButtonHome}
+                    \opt{IRIVER_H10_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD}{Long \ButtonPlay}
+                    \opt{IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}{Long \ButtonPlay}
+                    \opt{MROBE100_PAD}{\ButtonDisplay; Long \ButtonPlay}
+                    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRec}
+                    \opt{XDUOO_X3_PAD}{\ButtonHome}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD,MROBE100_RC_PAD}{Long \ButtonRCPlay}%
+                        &}
+                    Slideshow leave
+                    \\
+    
+                    % Slide previous
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,IPOD_4G_PAD%
+                        ,IPOD_3G_PAD,IPOD_1G2G_PAD,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD}
+                        {\ButtonLeft}
+                    \opt{GIGABEAT_S_PAD}{\ButtonPrev; \ButtonLeft}
+                    \opt{IRIVER_H10_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRew}
+                    \opt{XDUOO_X3_PAD}{\ButtonPrev}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                      \opt{GIGABEAT_RC_PAD,MROBE100_RC_PAD}{\ButtonRCRew}%
+                      &}
+                    Slide previous
+                    \\
+    
+                    % Slide next
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,IPOD_4G_PAD%
+                        ,IPOD_3G_PAD,IPOD_1G2G_PAD,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD}
+                        {\ButtonRight}
+                    \opt{GIGABEAT_S_PAD}{\ButtonNext; \ButtonRight}
+                    \opt{IRIVER_H10_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonFF}
+                    \opt{XDUOO_X3_PAD}{\ButtonNext}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD,MROBE100_RC_PAD}{\ButtonRCFF}%
+                        &}
+                    Slide next
+                    \\
+    
+                    % Slide first
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,IPOD_4G_PAD%
+                        ,IPOD_3G_PAD,IPOD_1G2G_PAD,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD}
+                        {Long \ButtonLeft}
+                    \opt{GIGABEAT_S_PAD}{Long \ButtonPrev; Long \ButtonLeft}
+                    \opt{IRIVER_H10_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{Long \ButtonRew}
+                    \opt{XDUOO_X3_PAD}{Long \ButtonPrev}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{MROBE100_RC_PAD}{Long \ButtonRCRew}%
+                        &}
+                    Slide first
+                    \\
+    
+                    % Slide last
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,IPOD_4G_PAD%
+                        ,IPOD_3G_PAD,IPOD_1G2G_PAD,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD}
+                        {Long \ButtonRight}
+                    \opt{GIGABEAT_S_PAD}{Long \ButtonNext; Long \ButtonRight}
+                    \opt{IRIVER_H10_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{Long \ButtonFF}
+                    \opt{XDUOO_X3_PAD}{Long \ButtonNext}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{MROBE100_RC_PAD}{Long \ButtonRCFF}%
+                        &}
+                    Slide last
+                    \\
+    
+                    % Screen black
+                    \opt{SANSA_FUZEPLUS_PAD}{\ButtonBottomRight}
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,GIGABEAT_S_PAD,SANSA_C200_PAD%
+                        ,SANSA_CLIP_PAD}{\ButtonDown}
+                    \opt{IRIVER_H10_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonLeft}
+                    \opt{IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD,MROBE100_PAD}
+                        {\ButtonMenu}
+                    \opt{PBELL_VIBE500_PAD}{\ButtonCancel}
+                    \opt{XDUOO_X3_PAD}{\ButtonOption}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{MROBE100_RC_PAD}{\ButtonRCDisplay}%
+                        &}
+                    Black screen
+                    \\
+    
+                    % Screen white
+                    \opt{SANSA_FUZEPLUS_PAD}{Long \ButtonBottomRight}
+                    \opt{SANSA_E200_PAD,GIGABEAT_S_PAD,SANSA_C200_PAD%
+                        ,SANSA_CLIP_PAD}{Long \ButtonDown}
+                    \opt{IRIVER_H10_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{Long \ButtonLeft}
+                    \opt{IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD,MROBE100_PAD}
+                        {Long \ButtonMenu}
+                    \opt{PBELL_VIBE500_PAD}{\ButtonMenu}
+                    \opt{XDUOO_X3_PAD}{Long \ButtonOption}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{MROBE100_RC_PAD}{Long \ButtonRCDisplay}%
+                        &}
+                    White screen
+                    \\
+    
+                    % Link previous / next
+                    \opt{SANSA_E200_PAD,IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}
+                        {\ButtonScrollBack / \ButtonScrollFwd}
+                    \opt{GIGABEAT_S_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD}
+                        {\ButtonVolUp / \ButtonVolDown}
+                    \opt{IRIVER_H10_PAD}{\ButtonScrollUp / \ButtonScrollDown}
+                    \opt{MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD%
+                        ,SAMSUNG_YH820_PAD}
+                        {\ButtonUp / \ButtonDown}
+                    \opt{XDUOO_X3_PAD}{\ButtonVolUp{} / \ButtonVolDown}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD,MROBE100_RC_PAD}
+                            {\ButtonRCVolUp / \ButtonRCVolDown}%
+                        &}
+                    Previous / next link in slide, respectively
+                    \\
+    
+                    % Mouse click
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,IPOD_4G_PAD%
+                        ,IPOD_3G_PAD,IPOD_1G2G_PAD,MROBE100_PAD,SANSA_FUZEPLUS_PAD}
+                        {\ButtonSelect}
+                    \opt{GIGABEAT_S_PAD}{\ButtonSelect; \ButtonBack}
+                    \opt{IRIVER_H10_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRight}
+                    \opt{PBELL_VIBE500_PAD}{\ButtonOK}
+                    \opt{XDUOO_X3_PAD}{\ButtonPlay}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD}{Long \ButtonRCFF}%
+                        \opt{MROBE100_RC_PAD}{\ButtonRCHeart}%
+                        &}
+                    Perform a `mouse click' over a link
+                    \\
+    
+                    % Mouse over
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,IPOD_4G_PAD%
+                        ,IPOD_3G_PAD,IPOD_1G2G_PAD,MROBE100_PAD,SANSA_FUZEPLUS_PAD}{Long \ButtonSelect}
+                    \opt{GIGABEAT_S_PAD}{Long \ButtonSelect; Long \ButtonBack}
+                    \opt{IRIVER_H10_PAD,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{Long \ButtonRight}
+                    \opt{PBELL_VIBE500_PAD}{Long \ButtonOK}
+                    \opt{XDUOO_X3_PAD}{Long \ButtonPlay}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD}{Long \ButtonRCRew}%
+                        \opt{MROBE100_RC_PAD}{Long \ButtonRCHeart}%
+                        &}
+                    Perform a `mouse over' over a link
+                    \\
+                \end{btnmap}
+    
+            \item [Browser.] This mode lets you control a web browser (e.g.
+            Firefox). It uses the \dap{}'s keys to navigate through the web page
+            and different tabs, navigate through history, and to control zoom.
+    
+                \begin{btnmap}
+                    % Scroll up / down
+                    \opt{SANSA_E200_PAD,IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}
+                        {\ButtonScrollBack / \ButtonScrollFwd}
+                    \opt{SANSA_C200_PAD,SANSA_CLIP_PAD}
+                        {\ButtonVolUp / \ButtonVolDown}
+                    \opt{GIGABEAT_S_PAD}
+                        {\ButtonPrev; \ButtonVolUp / \ButtonNext; \ButtonVolDown}
+                    \opt{IRIVER_H10_PAD}{\ButtonScrollUp / \ButtonScrollDown}
+                    \opt{MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD,SAMSUNG_YH92X_PAD%
+                        ,SAMSUNG_YH820_PAD}
+                        {\ButtonUp / \ButtonDown}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD,MROBE100_RC_PAD}
+                            {\ButtonRCVolUp / \ButtonRCVolDown}%
+                      &}
+                    Scroll up / down, respectively
+                    \\
+    
+                    % Scroll page up / page down
+                    \nopt{SANSA_FUZEPLUS_PAD}{
+                        \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD}
+                            {\ButtonUp / \ButtonDown}
+                        \opt{GIGABEAT_S_PAD}{\ButtonUp / \ButtonDown}
+                        \opt{IRIVER_H10_PAD}{\ButtonRew / \ButtonFF}
+                        \opt{IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD,MROBE100_PAD}
+                            {\ButtonPlay / \ButtonMenu}
+                        \opt{PBELL_VIBE500_PAD}{\ButtonOK / \ButtonCancel}
+                        \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonLeft / \ButtonRight}
+                            &
+                        \opt{HAVEREMOTEKEYMAP}{
+                            \opt{MROBE100_RC_PAD}{\ButtonRCPlay / \ButtonRCDisplay}%
+                            &}
+                        Scroll page up / page down, respectively
+                        \\
+                    }
+    
+                    % Zoom in / out
+                    \opt{SANSA_FUZEPLUS_PAD}{Long \ButtonBottomRight}
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD}
+                        {Long \ButtonUp / Long \ButtonDown}
+                    \opt{GIGABEAT_S_PAD}{Long \ButtonUp / Long \ButtonDown}
+                    \opt{IRIVER_H10_PAD}{Long \ButtonRew / Long \ButtonFF}
+                    \opt{IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD,MROBE100_PAD}
+                        {Long \ButtonPlay / Long \ButtonMenu}
+                    \opt{PBELL_VIBE500_PAD}{\ButtonPlay / \ButtonMenu}
+                    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{Long \ButtonLeft / Long \ButtonRight}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD}{Long \ButtonRCFF / Long \ButtonRCRew}%
+                        \opt{MROBE100_RC_PAD}
+                            {Long \ButtonRCPlay / Long \ButtonRCDisplay}%
+                        &}
+                    Zoom in / out, respectively
+                    \\
+    
+                    % Zoom reset
+                    \opt{SANSA_E200_PAD}
+                        {Long \ButtonSelect; Long \ButtonUp+\ButtonDown}
+                    \opt{MROBE100_PAD}
+                        {Long \ButtonSelect; Long \ButtonPlay+\ButtonMenu}
+                    \opt{SANSA_CLIP_PAD,SANSA_C200_PAD}
+                        {Long \ButtonSelect; Long \ButtonUp+\ButtonDown}
+                    \opt{GIGABEAT_S_PAD}
+                        {Long \ButtonSelect; Long \ButtonUp+\ButtonDown}
+                    \opt{IRIVER_H10_PAD}{Long \ButtonRew+\ButtonFF}
+                    \opt{IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}
+                        {Long \ButtonPlay+\ButtonMenu}
+                    \opt{PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD}{Long \ButtonPlay}
+                    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{Long \ButtonLeft+\ButtonDown}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD}{Long \ButtonRCFF+\ButtonRCRew}%
+                        \opt{MROBE100_RC_PAD}{Long \ButtonRCHeart}%
+                      &}
+                    Zoom reset
+                    \\
+    
+                    % Tab previous / next
+                    \opt{SANSA_E200_PAD,GIGABEAT_S_PAD,SANSA_C200_PAD%
+                        ,SANSA_CLIP_PAD,IRIVER_H10_PAD,IPOD_4G_PAD,IPOD_3G_PAD%
+                        ,IPOD_1G2G_PAD,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD}
+                        {\ButtonLeft / \ButtonRight}
+                    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRew / \ButtonFF}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD,MROBE100_RC_PAD}
+                            {\ButtonRCRew / \ButtonRCFF}%
+                        &}
+                    Tab previous / next, respectively
+                    \\
+    
+                    % Tab close
+                    \opt{SANSA_FUZEPLUS_PAD}{\ButtonBack}
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD}{Long \ButtonPower}
+                    \opt{GIGABEAT_S_PAD}{Long \ButtonPlay; Long \ButtonBack}
+                    \opt{SANSA_CLIP_PAD}{Long \ButtonHome}
+                    \opt{IRIVER_H10_PAD}{Long \ButtonLeft+\ButtonRight}
+                    \opt{MROBE100_PAD}{Long \ButtonDisplay}
+                    \opt{IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}
+                        {Long \ButtonSelect+\ButtonMenu}
+                    \opt{PBELL_VIBE500_PAD}{Long \ButtonCancel}
+                    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonPlay}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD}{Long \ButtonRCPlay}%
+                        &}
+                    Tab close
+                    \\
+    
+                    % History back / forward
+                    \opt{SANSA_E200_PAD,GIGABEAT_S_PAD,SANSA_C200_PAD%
+                        ,SANSA_CLIP_PAD,IRIVER_H10_PAD,IPOD_4G_PAD,IPOD_3G_PAD%
+                        ,IPOD_1G2G_PAD,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD}
+                        {Long \ButtonLeft / Long \ButtonRight}
+                    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{Long \ButtonRew / Long \ButtonFF}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{MROBE100_RC_PAD}{Long \ButtonRCRew / Long \ButtonRCFF}%
+                        &}
+                    History back / forward
+                    \\
+    
+                    % View full-screen
+                    \opt{SANSA_FUZEPLUS_PAD}{Long \ButtonSelect}
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD%
+                        ,GIGABEAT_S_PAD,MROBE100_PAD}
+                        {\ButtonSelect}
+                    \opt{IRIVER_H10_PAD}{\ButtonPlay}
+                    \opt{IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}
+                        {Long \ButtonSelect+\ButtonPlay}
+                    \opt{PBELL_VIBE500_PAD}{Long \ButtonRec}
+                    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRec}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{GIGABEAT_RC_PAD}{\ButtonRCPlay}%
+                        \opt{MROBE100_RC_PAD}{\ButtonRCHeart}%
+                        &}
+                    View full-screen toggle
+                    \\
+                \end{btnmap}
+    
+            {\opt{usb_hid_mouse}{
+            \item [Mouse.] This mode emulates a mouse. Features supported: Mouse
+            movement; left and right button clicking; and dragging and dropping.
+    
+                \begin{btnmap}
+                    % Cursor move up / down / left / right
+                    \opt{SANSA_E200_PAD,GIGABEAT_S_PAD,SANSA_C200_PAD%
+                        ,SANSA_CLIP_PAD,MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD%
+                        ,SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}
+                        {\ButtonUp / \ButtonDown / \ButtonLeft / \ButtonRight}
+                    \opt{IRIVER_H10_PAD}{\ButtonScrollUp / \ButtonScrollDown /
+                        \ButtonLeft / \ButtonRight}
+                    \opt{IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}
+                        {\ButtonMenu / \ButtonPlay / \ButtonLeft / \ButtonRight}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{MROBE100_RC_PAD}{\ButtonRCPlay / \ButtonRCDisplay /
+                            \ButtonRCRew / \ButtonRCFF}%
+                        &}
+                    Cursor move up / down / left / right, respectively
+                    \\
+    
+                    % Mouse button left-click
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD,SANSA_CLIP_PAD,IPOD_4G_PAD%
+                        ,IPOD_3G_PAD,IPOD_1G2G_PAD,SANSA_FUZEPLUS_PAD}
+                        {\ButtonSelect}
+                    \opt{GIGABEAT_S_PAD}{\ButtonSelect; \ButtonBack}
+                    \opt{IRIVER_H10_PAD}{\ButtonPlay}
+                    \opt{MROBE100_PAD,PBELL_VIBE500_PAD}{\ButtonMenu}
+                    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonRew}
+                        &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{MROBE100_RC_PAD}{\ButtonRCHeart}%
+                        &}
+                    Left mouse button click
+                    \nopt{IRIVER_H10_PAD,IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}{
+                    \\
+    
+                    % Mouse button right-click
+                    \opt{SANSA_E200_PAD,SANSA_C200_PAD}{\ButtonPower}
+                    \opt{GIGABEAT_S_PAD}{\ButtonMenu}
+                    \opt{SANSA_CLIP_PAD}{\ButtonHome}
+                    \opt{MROBE100_PAD,PBELL_VIBE500_PAD,SANSA_FUZEPLUS_PAD}{\ButtonPlay}
+                    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}{\ButtonFF}
+                    &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        &}
+                    Right mouse button click
+                    }
+                    \\
+    
+                    % Mouse wheel scroll up / down
+                    \opt{SANSA_FUZEPLUS_PAD}
+                        {\ButtonBack / \ButtonBottomLeft}
+                    \opt{SANSA_E200_PAD,IPOD_4G_PAD,IPOD_3G_PAD,IPOD_1G2G_PAD}
+                        {\ButtonScrollBack / \ButtonScrollFwd}
+                    \opt{IRIVER_H10_PAD}{\ButtonRew / \ButtonFF}
+                    \opt{GIGABEAT_S_PAD}
+                        {\ButtonVolUp; \ButtonPrev / \ButtonVolDown; \ButtonNext}
+                    \opt{SANSA_C200_PAD,SANSA_CLIP_PAD,MROBE100_PAD}
+                        {\ButtonVolUp / \ButtonVolDown}
+                    \opt{PBELL_VIBE500_PAD}
+                        {\ButtonOK / \ButtonCancel}
+                    \opt{SAMSUNG_YH92X_PAD,SAMSUNG_YH820_PAD}
+                        {\ButtonRec+\ButtonUp / \ButtonRec+\ButtonDown}
+                    &
+                    \opt{HAVEREMOTEKEYMAP}{
+                        \opt{MROBE100_RC_PAD}{\ButtonRCVolUp / \ButtonRCVolDown}%
+                        &}
+                    Mouse wheel scroll up / down, respectively
+                    \\
+    
+                \end{btnmap}
+        }}
+        \end{description}
+    }
+    \opt{usb_power}{
+      \item[USB Mode]
+        This controls what happens with the \dap{}'s USB port is connected.
+        \setting{Mass Storage} allows you to transfer files, while
+        \setting{Charge Only} will only charge the battery (and allow you to keep
+        using the player). You can choose the opposite behavior by holding down any
+        button while plugging in the USB cable.
+        \nopt{fuzeplus}{
+          \note{Be aware that holding a button may still perform its normal function,
+          so it is recommended to use a button without harmful side effects, such as
+          \ActionStdUsbCharge{}.}
+        }
+    }
+    \opt{multidrive_usb}{
+      \item[USB Hide Internal Drive]
+        If this option is turned \setting{On}, the internal storage drive will not
+        be exposed on the USB Mass Storage Device. This e.g. makes it possible to
+        access the card slot from systems that can not handle USB devices with
+        multiple drives, such as some car audio systems.
+    }
+  \end{description}
