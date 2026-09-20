@@ -11,6 +11,8 @@ Credits:
   DFU workflow, safety checks, installer UI, and hardware validation.
 - **freemyipod / wInd3x contributors** — the DFU exploit/workflow that makes it
   possible to run unsigned Nano 3G bootloader images.
+- **Andrew Rice** — reverse-engineering and documentation of the iPod Nano 3G
+  platform that helped inform this port.
 - **mks5lboot contributors** — DFU and Nano 3G NOR image tooling.
 - **PyInstaller contributors** — single-file Windows executable packaging.
 - **Zadig contributors** — optional WinUSB driver installation utility bundled
