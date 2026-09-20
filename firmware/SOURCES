@@ -1636,7 +1636,9 @@ target/arm/s5l8702/ipodnano3g/powermgmt-nano3g.c
 target/arm/s5l8702/ipodnano3g/power-nano3g.c
 target/arm/s5l8702/ipodnano3g/nand-nano3g.c
 target/arm/s5l8702/ipodnano3g/nand_vendor.c
-#ifdef FTL_NANO3G_V2
+#ifdef FTL_APPLE_COMPAT
+target/arm/s5l8702/ipodnano3g/ftl-apple-nano3g.c
+#elif defined(FTL_NANO3G_V2)
 target/arm/s5l8702/ipodnano3g/ftl-nano3g-v2.c
 #else
 target/arm/s5l8702/ipodnano3g/ftl-nano3g.c

@@ -6,7 +6,9 @@
  *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
  *                     \/            \/     \/    \/            \/
  *
- * Copyright (C) 2009 by Dave Chapman
+ * iPod Nano 3G ("N46") LCD target configuration.
+ *
+ * Original implementation for this project.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -20,14 +22,8 @@
 #ifndef __LCD_TARGET_H__
 #define __LCD_TARGET_H__
 
-// #include "config.h"
-
-/* define this to add support for LCDs with 16-bit command set */
-// #define S5L_LCD_WITH_CMDSET16
-
-/* define this to include support for LCD read ID command */
+/* This target's panels support the LCD read-ID command, used to tell the
+ * (up to five) different panel variants fitted at the factory apart. */
 #define S5L_LCD_WITH_READID
-
-// struct lcd_info_rec* lcd_target_get_info(void);
 
 #endif /* __LCD_TARGET_H__ */

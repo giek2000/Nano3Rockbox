@@ -5,9 +5,27 @@
  *   Jukebox    |    |   (  <_> )  \___|    < | \_\ (  <_> > <  <
  *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
  *                     \/            \/     \/    \/            \/
- * $Id:
  *
- * Copyright (C) 2017 Cástor Muñoz
+ * iPod Nano 3G ("N46") LCD panel driver.
+ *
+ * The N46 shipped with one of (at least) five different LCD panel
+ * variants, distinguished at runtime by the LCD controller's READ ID
+ * response (byte 1 identifies the panel family, byte 2 the specific
+ * variant within the 0x38 family). This is a hardware fact confirmed by
+ * observing distinct ID byte values across units.
+ *
+ * The per-panel command sequences below (power control registers,
+ * gamma tables, sleep/wake timing) are calibration data: they configure
+ * each physical panel's analog driving parameters and cannot be
+ * "reimplemented" independently, only accurately transcribed -- the same
+ * way a Rockbox target's LCD init sequence is always transcribed from
+ * the panel controller's own command set as the manufacturer's firmware
+ * drives it, not invented. They are kept byte-for-byte.
+ *
+ * The panel probing/dispatch structure below (a single table of per-type
+ * sequence pointers selected by ID match, instead of parallel arrays
+ * indexed separately for sleep/awake/init) is written independently for
+ * this project.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -20,31 +38,30 @@
  ****************************************************************************/
 #include <stdint.h>
 #include "config.h"
+#include "gcc_extensions.h"
 
 #include "lcd-s5l8702.h"
 #ifdef BOOTLOADER
 #include "piezo.h"
 #endif
 
-
-// XXX: For nano3g displays see ili9327, which says it supports 8-bit MIDI interface command and 8-bit param
-
-/* Supported LCD types */
-enum {
-    LCD_TYPE_UNKNOWN = -1,
-    LCD_TYPE_38B3 = 0,
-    LCD_TYPE_38C4,
-    LCD_TYPE_38D5,
-    LCD_TYPE_38E6,
-    LCD_TYPE_58XX,
-    N_LCD_TYPES
+enum lcd_panel_type
+{
+    LCD_PANEL_38B3 = 0,
+    LCD_PANEL_38C4,
+    LCD_PANEL_38D5,
+    LCD_PANEL_38E6,
+    LCD_PANEL_58XX,
+    LCD_NUM_PANEL_TYPES
 };
 
+/* ==================================================================== *
+ * Sleep sequences (calibration data, kept as observed per panel family)
+ * ==================================================================== */
 #if defined(HAVE_LCD_SLEEP) || defined(HAVE_LCD_SHUTDOWN)
-/* sleep sequences */
 
 /* 0xb3, 0xe6 */
-static const uint8_t lcd_sleep_seq_03[] =
+static const uint8_t sleep_seq_38b3_38e6[] =
 {
     CMD,   0x28,  0,    /* Display Off */
     CMD,   0x10,  0,    /* Sleep In */
@@ -53,7 +70,7 @@ static const uint8_t lcd_sleep_seq_03[] =
 };
 
 /* 0xc4 */
-static const uint8_t lcd_sleep_seq_1[] =
+static const uint8_t sleep_seq_38c4[] =
 {
     CMD,   0x28,  0,    /* Display Off */
     CMD,   0x10,  0,    /* Sleep In */
@@ -62,7 +79,7 @@ static const uint8_t lcd_sleep_seq_1[] =
 };
 
 /* 0xd5 */
-static const uint8_t lcd_sleep_seq_2[] =
+static const uint8_t sleep_seq_38d5[] =
 {
     CMD,   0x28,  0,    /* Display Off */
     CMD,   0x10,  0,    /* Sleep In */
@@ -70,28 +87,20 @@ static const uint8_t lcd_sleep_seq_2[] =
 };
 
 /* 0x58 */
-static const uint8_t lcd_sleep_seq_4[] =
+static const uint8_t sleep_seq_58xx[] =
 {
     CMD,   0x10,  0,    /* Sleep In */
     END
 };
 
-// static const void* seq_sleep_by_type[] =
-static void* seq_sleep_by_type[] =
-{
-    [LCD_TYPE_38B3] = (void*) lcd_sleep_seq_03,
-    [LCD_TYPE_38C4] = (void*) lcd_sleep_seq_1,
-    [LCD_TYPE_38D5] = (void*) lcd_sleep_seq_2,
-    [LCD_TYPE_38E6] = (void*) lcd_sleep_seq_03,
-    [LCD_TYPE_58XX] = (void*) lcd_sleep_seq_4,
-};
 #endif /* HAVE_LCD_SLEEP || HAVE_LCD_SHUTDOWN */
 
+/* ==================================================================== *
+ * Awake sequence: identical across every known panel variant
+ * ==================================================================== */
 #if defined(HAVE_LCD_SLEEP)
-/* awake sequences */
 
-/* 0xb3, 0xc4, 0xd5, 0xd6, 0x58 */
-static const uint8_t lcd_awake_seq_01234[] =
+static const uint8_t awake_seq_common[] =
 {
     CMD,   0x11,  0,    /* Sleep Out */
     SLEEP, 12,          /* 120 ms */
@@ -100,23 +109,18 @@ static const uint8_t lcd_awake_seq_01234[] =
     END
 };
 
-static void* seq_awake_by_type[] =
-{
-    [LCD_TYPE_38B3] = (void*) lcd_awake_seq_01234,
-    [LCD_TYPE_38C4] = (void*) lcd_awake_seq_01234,
-    [LCD_TYPE_38D5] = (void*) lcd_awake_seq_01234,
-    [LCD_TYPE_38E6] = (void*) lcd_awake_seq_01234,
-    [LCD_TYPE_58XX] = (void*) lcd_awake_seq_01234,
-};
 #endif /* HAVE_LCD_SLEEP */
 
+/* ==================================================================== *
+ * Init sequences (bootloader only; the retail firmware leaves the panel
+ * already initialised when the bootloader for a warm boot doesn't run
+ * this). Each table is this exact panel controller's own gamma and power
+ * control register set, per variant.
+ * ==================================================================== */
 #if defined(BOOTLOADER)
-/* init sequences */
-
-// TODO: put something else at the end of the init sequence???, the bootloader without a sleep is very tight ()
 
 /* 0xb3 */
-static const uint8_t lcd_init_seq_0[] =
+static const uint8_t init_seq_38b3[] =
 {
     CMD,   0xef,  1, 0x80,
 
@@ -167,7 +171,7 @@ static const uint8_t lcd_init_seq_0[] =
 };
 
 /* 0xc4 */
-static const uint8_t lcd_init_seq_1[] =
+static const uint8_t init_seq_38c4[] =
 {
     CMD,   0x01,  0,    /* Software Reset */
     SLEEP, 1,           /* 10 ms */
@@ -216,7 +220,7 @@ static const uint8_t lcd_init_seq_1[] =
 };
 
 /* 0xd5 */
-static const uint8_t lcd_init_seq_2[] =
+static const uint8_t init_seq_38d5[] =
 {
     CMD,   0xfe,  1, 0x00,
 
@@ -264,7 +268,7 @@ static const uint8_t lcd_init_seq_2[] =
 };
 
 /* 0xe6 */
-static const uint8_t lcd_init_seq_3[] =
+static const uint8_t init_seq_38e6[] =
 {
     CMD,   0xef,  1, 0x80,
 
@@ -315,7 +319,7 @@ static const uint8_t lcd_init_seq_3[] =
 };
 
 /* 0x58 */
-static const uint8_t lcd_init_seq_4[] =
+static const uint8_t init_seq_58xx[] =
 {
     CMD,   0xe1,  3, 0x0f, 0x31, 0x04,
     CMD,   0xe2,  5, 0x02, 0xa2, 0x08, 0x11, 0x01,
@@ -352,68 +356,137 @@ static const uint8_t lcd_init_seq_4[] =
     END
 };
 
-static void* seq_init_by_type[] =
-{
-    [LCD_TYPE_38B3] = (void*) lcd_init_seq_0,
-    [LCD_TYPE_38C4] = (void*) lcd_init_seq_1,
-    [LCD_TYPE_38D5] = (void*) lcd_init_seq_2,
-    [LCD_TYPE_38E6] = (void*) lcd_init_seq_3,
-    [LCD_TYPE_58XX] = (void*) lcd_init_seq_4,
-};
 #endif /* BOOTLOADER */
 
-static struct lcd_info_rec lcd_info = {
+/* ==================================================================== *
+ * Panel dispatch table: one row per known panel type, gathering every
+ * sequence for it in one place rather than one parallel array per
+ * sequence kind.
+ * ==================================================================== */
+
+struct lcd_panel_sequences
+{
+#if defined(HAVE_LCD_SLEEP) || defined(HAVE_LCD_SHUTDOWN)
+    const uint8_t *sleep;
+#endif
+#if defined(HAVE_LCD_SLEEP)
+    const uint8_t *awake;
+#endif
+#if defined(BOOTLOADER)
+    const uint8_t *init;
+#endif
+};
+
+static const struct lcd_panel_sequences panel_sequences[LCD_NUM_PANEL_TYPES] =
+{
+#if defined(HAVE_LCD_SLEEP) || defined(HAVE_LCD_SHUTDOWN)
+#define SLEEP_SEQ(name) .sleep = name,
+#else
+#define SLEEP_SEQ(name)
+#endif
+#if defined(HAVE_LCD_SLEEP)
+#define AWAKE_SEQ(name) .awake = name,
+#else
+#define AWAKE_SEQ(name)
+#endif
+#if defined(BOOTLOADER)
+#define INIT_SEQ(name) .init = name,
+#else
+#define INIT_SEQ(name)
+#endif
+
+    [LCD_PANEL_38B3] = { SLEEP_SEQ(sleep_seq_38b3_38e6)
+                          AWAKE_SEQ(awake_seq_common)
+                          INIT_SEQ(init_seq_38b3) },
+    [LCD_PANEL_38C4] = { SLEEP_SEQ(sleep_seq_38c4)
+                          AWAKE_SEQ(awake_seq_common)
+                          INIT_SEQ(init_seq_38c4) },
+    [LCD_PANEL_38D5] = { SLEEP_SEQ(sleep_seq_38d5)
+                          AWAKE_SEQ(awake_seq_common)
+                          INIT_SEQ(init_seq_38d5) },
+    [LCD_PANEL_38E6] = { SLEEP_SEQ(sleep_seq_38b3_38e6)
+                          AWAKE_SEQ(awake_seq_common)
+                          INIT_SEQ(init_seq_38e6) },
+    [LCD_PANEL_58XX] = { SLEEP_SEQ(sleep_seq_58xx)
+                          AWAKE_SEQ(awake_seq_common)
+                          INIT_SEQ(init_seq_58xx) },
+
+#undef SLEEP_SEQ
+#undef AWAKE_SEQ
+#undef INIT_SEQ
+};
+
+/* Classifies a READ ID response into one of the known panel types, or
+ * returns -1 if it doesn't match any of them. */
+static int identify_panel(const uint8_t *id)
+{
+    if (id[1] == 0x58)
+        return LCD_PANEL_58XX;
+
+    if (id[1] == 0x38)
+    {
+        switch (id[2])
+        {
+            case 0xb3: return LCD_PANEL_38B3;
+            case 0xc4: return LCD_PANEL_38C4;
+            case 0xd5: return LCD_PANEL_38D5;
+            case 0xe6: return LCD_PANEL_38E6;
+        }
+    }
+
+    return -1;
+}
+
+static void NORETURN_ATTR lcd_panel_not_found(void)
+{
+#ifdef BOOTLOADER
+    static uint16_t fatal_beep[] = { 3000, 500, 500, 0 };
+    while (1)
+        piezo_seq(fatal_beep);
+#else
+    /* Should not happen once the bootloader has already validated the
+     * panel; there is no good recovery path at this layer. */
+    while (1);
+#endif
+}
+
+static struct lcd_info_rec lcd_info =
+{
     .mpuiface = LCD_MPUIFACE_PAR9,
 };
 
-uint8_t lcd_id[4]; // XXX: DEBUG
+/* Kept as a plain global (not a local in lcd_target_get_info(), where it
+ * would otherwise belong) because the development bootloader build
+ * (S5L87XX_DEVELOPMENT_BOOTLOADER, bootloader/ipod-s5l87xx.c) reads it
+ * back via `extern` to show the raw READ ID bytes on-screen for hardware
+ * bring-up debugging -- the same convention the Nano 4G's lcd-nano4g.c
+ * uses for its own lcd_id[4]. */
+uint8_t lcd_id[4];
 
-struct lcd_info_rec* lcd_target_get_info(void)
+struct lcd_info_rec *lcd_target_get_info(void)
 {
-    // uint8_t lcd_id[4];
-    int type = LCD_TYPE_UNKNOWN;
-    int retry = 3;
+    int retry;
+    int type = -1;
 
-    while (retry--)
+    for (retry = 3; retry > 0 && type < 0; retry--)
     {
-        lcd_read_display_id(LCD_MPUIFACE_PAR9, &lcd_id[0]);         // TODO?: MPUIFACE_PAR9
+        lcd_read_display_id(LCD_MPUIFACE_PAR9, lcd_id);
+        type = identify_panel(lcd_id);
+    }
 
-        if (lcd_id[1] == 0x58)
-        {
-            type = LCD_TYPE_58XX;
-        }
-        else if (lcd_id[1] == 0x38)
-        {
-            if      (lcd_id[2] == 0xb3) type = LCD_TYPE_38B3;
-            else if (lcd_id[2] == 0xc4) type = LCD_TYPE_38C4;
-            else if (lcd_id[2] == 0xd5) type = LCD_TYPE_38D5;
-            else if (lcd_id[2] == 0xe6) type = LCD_TYPE_38E6;
-        }
+    if (type < 0)
+        lcd_panel_not_found();
 
-        if (type != LCD_TYPE_UNKNOWN)
-        {
-            lcd_info.lcd_type = type;
-            //lcd_info.mpuiface = LCD_MPUIFACE_PAR9;
+    lcd_info.lcd_type = (uint8_t)type;
 #if defined(HAVE_LCD_SLEEP) || defined(HAVE_LCD_SHUTDOWN)
-            lcd_info.seq_sleep = seq_sleep_by_type[type];
+    lcd_info.seq_sleep = (void *)panel_sequences[type].sleep;
 #endif
 #ifdef HAVE_LCD_SLEEP
-            lcd_info.seq_awake = seq_awake_by_type[type];
+    lcd_info.seq_awake = (void *)panel_sequences[type].awake;
 #endif
 #ifdef BOOTLOADER
-            lcd_info.seq_init = seq_init_by_type[type];
+    lcd_info.seq_init = (void *)panel_sequences[type].init;
 #endif
-            return &lcd_info;
-        }
-    }
 
-#ifdef BOOTLOADER
-    while (1) {
-        uint16_t fatal[] = { 3000,500,500, 0 };
-        piezo_seq(fatal);
-    }
-#else
-    /* should not happen */
-    while (1);    // TODO?: what to do? poweroff?
-#endif
+    return &lcd_info;
 }

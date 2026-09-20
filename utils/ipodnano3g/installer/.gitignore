@@ -1,0 +1,6 @@
+# Generated installer payload and build outputs
+payload/
+build/
+dist/
+__pycache__/
+*.pyc

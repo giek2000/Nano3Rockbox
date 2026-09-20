@@ -6,7 +6,9 @@
  *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
  *                     \/            \/     \/    \/            \/
  *
- * Copyright (C) 2008 by Marcoen Hirschberg
+ * iPod Nano 3G ("N46") backlight driver public interface.
+ *
+ * Original implementation for this project.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License

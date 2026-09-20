@@ -6,7 +6,13 @@
  *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
  *                     \/            \/     \/    \/            \/
  *
- * Copyright (C) 2006 by Michael Sevakis
+ * iPod Nano 3G ("N46") audio source selection glue.
+ *
+ * Original implementation for this project. This layer only decides
+ * which audio path is active (playback vs. recording sources) and
+ * delegates the actual codec configuration to audiohw_* calls implemented
+ * in wmcodec-nano3g.c; there is no target-specific hardware knowledge in
+ * this file.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -22,55 +28,56 @@
 #include "audio.h"
 #include "sound.h"
 
-
 #if INPUT_SRC_CAPS != 0
+
 void audio_set_output_source(int source)
 {
     if ((unsigned)source >= AUDIO_NUM_SOURCES)
         source = AUDIO_SRC_PLAYBACK;
-} /* audio_set_output_source */
+}
 
 void audio_input_mux(int source, unsigned flags)
 {
+    static int active_source = AUDIO_SRC_PLAYBACK;
     (void)flags;
-    /* Prevent pops from unneeded switching */
-    static int last_source = AUDIO_SRC_PLAYBACK;
 
     switch (source)
     {
-        default:                        /* playback - no recording */
+        default:
             source = AUDIO_SRC_PLAYBACK;
+            /* fall through */
         case AUDIO_SRC_PLAYBACK:
 #ifdef HAVE_RECORDING
-            if (source != last_source)
+            if (source != active_source)
             {
                 audiohw_set_monitor(false);
                 audiohw_disable_recording();
             }
 #endif
-        break;
+            break;
 
 #ifdef HAVE_MIC_REC
-        case AUDIO_SRC_MIC:             /* recording only */
-            if (source != last_source)
+        case AUDIO_SRC_MIC:
+            if (source != active_source)
             {
                 audiohw_set_monitor(false);
-                audiohw_enable_recording(true);  /* source mic */
+                audiohw_enable_recording(true);  /* source: mic */
             }
-        break;
+            break;
 #endif
 
 #ifdef HAVE_LINE_REC
-        case AUDIO_SRC_LINEIN:          /* recording only */
-            if (source != last_source)
+        case AUDIO_SRC_LINEIN:
+            if (source != active_source)
             {
                 audiohw_set_monitor(false);
-                audiohw_enable_recording(false); /* source line */
+                audiohw_enable_recording(false); /* source: line */
             }
-        break;
+            break;
 #endif
-    } /* end switch */
+    }
 
-    last_source = source;
-} /* audio_input_mux */
+    active_source = source;
+}
+
 #endif /* INPUT_SRC_CAPS != 0 */

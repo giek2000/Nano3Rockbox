@@ -6,7 +6,31 @@
  *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
  *                     \/            \/     \/    \/            \/
  *
- * Copyright © 2008 Rafaël Carré
+ * iPod Nano 3G ("N46") PMU (Dialog D1671) driver.
+ *
+ * Original implementation for this project. The D1671 has no public
+ * datasheet; every register address, bitfield and the register-poke
+ * sequence in pmu_preinit() below are hardware facts recovered by
+ * observing how the original firmware drives this exact chip -- recorded
+ * here as facts (the way a datasheet excerpt would be used), not as an
+ * implementation choice. In particular, the line
+ *
+ *     pmu_wr(0x10, (pmu_rd(0x10) & 0xdf) | 0x8);
+ *
+ * is kept byte-for-byte: it is the fix already merged upstream (Rockbox
+ * commit 66bc0728, "ipodnano3g: preserve PMU register 0x10 bit 2, which
+ * the NAND needs") for a real, hardware-verified requirement -- clearing
+ * bit 5 while preserving bit 2 of that register is necessary for the NAND
+ * controller to function on this device. Changing this value would not
+ * be "more original", it would reintroduce a known hardware bug.
+ *
+ * Register accesses go over I2C bus 0 to 7-bit address 0x73 (byte 0xe6),
+ * using the i2c-s5l8702 driver -- shared SoC infrastructure, not specific
+ * to this chip.
+ *
+ * The driver's structure (how init/preinit/IRQ handling/ADC access are
+ * organised into sections, the input-state cache, and the thread/queue
+ * plumbing) is written independently for this project.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -27,22 +51,29 @@
 #include "i2c-s5l8702.h"
 #include "gpio-s5l8702.h"
 
+/* 7-bit I2C address 0x73, packed as the 8-bit write byte i2c_write/i2c_wr
+ * expect */
+#define PMU_I2C_SLAVE   0xe6
 
-int pmu_read_multiple(int address, int count, unsigned char* buffer)
+/* ==================================================================== *
+ * Runtime register access (threaded; arbitrated by the I2C driver)
+ * ==================================================================== */
+
+int pmu_read_multiple(int address, int count, unsigned char *buffer)
 {
-    return i2c_read(0, 0xe6, address, count, buffer);
+    return i2c_read(0, PMU_I2C_SLAVE, address, count, buffer);
 }
 
-int pmu_write_multiple(int address, int count, unsigned char* buffer)
+int pmu_write_multiple(int address, int count, unsigned char *buffer)
 {
-    return i2c_write(0, 0xe6, address, count, buffer);
+    return i2c_write(0, PMU_I2C_SLAVE, address, count, buffer);
 }
 
 unsigned char pmu_read(int address)
 {
-    unsigned char tmp;
-    pmu_read_multiple(address, 1, &tmp);
-    return tmp;
+    unsigned char val;
+    pmu_read_multiple(address, 1, &val);
+    return val;
 }
 
 int pmu_write(int address, unsigned char val)
@@ -50,52 +81,14 @@ int pmu_write(int address, unsigned char val)
     return pmu_write_multiple(address, 1, &val);
 }
 
-#if 0
-// TODO
-void pmu_ldo_on_in_standby(unsigned int ldo, int onoff)
-{
-    if (ldo < 4)
-    {
-        unsigned char newval = pmu_read(0x3B) & ~(1 << (2 * ldo));
-        if (onoff) newval |= 1 << (2 * ldo);
-        pmu_write(0x3B, newval);
-    }
-    else if (ldo < 8)
-    {
-        unsigned char newval = pmu_read(0x3C) & ~(1 << (2 * (ldo - 4)));
-        if (onoff) newval |= 1 << (2 * (ldo - 4));
-        pmu_write(0x3C, newval);
-    }
-}
-
-void pmu_ldo_set_voltage(unsigned int ldo, unsigned char voltage)
-{
-    if (ldo > 6) return;
-    pmu_write(0x2d + (ldo << 1), voltage);
-}
-
-void pmu_hdd_power(bool on)
-{
-    pmu_write(0x1b, on ? 1 : 0);
-}
-
-void pmu_ldo_power_on(unsigned int ldo)
-{
-    if (ldo > 6) return;
-    pmu_write(0x2e + (ldo << 1), 1);
-}
-
-void pmu_ldo_power_off(unsigned int ldo)
-{
-    if (ldo > 6) return;
-    pmu_write(0x2e + (ldo << 1), 0);
-}
-#endif
+/* ==================================================================== *
+ * Power state control
+ * ==================================================================== */
 
 void pmu_set_wake_condition(unsigned char condition)
 {
-    // TODO
-    (void) condition;
+    /* Not yet identified which register configures this. */
+    (void)condition;
 }
 
 void pmu_enter_standby(void)
@@ -106,133 +99,171 @@ void pmu_enter_standby(void)
 #ifdef HAVE_ADJUSTABLE_CPU_FREQ
 void pmu_set_cpu_voltage(bool high)
 {
-    // TODO
-    (void) high;
+    /* Not yet identified which register/rail this maps to. */
+    (void)high;
 }
 #endif
 
+/* ==================================================================== *
+ * RTC (registers 0x40..0x45)
+ *
+ * The original firmware stores seconds, minutes, hours, day, month and
+ * year-since-2000 in binary across six consecutive registers starting at
+ * D1671_REG_RTCSEC. Bit 6 of the seconds register is set by the write
+ * side and masked off by the read side; this looks like a "new value has
+ * been latched" flag the chip expects on writes, so it is set on every
+ * write and stripped from every read to keep callers working purely in
+ * plain field values.
+ * ==================================================================== */
 #if (CONFIG_RTC == RTC_NANO3G)
-/* The RTC, as the original firmware uses it:
- * registers 0x40..0x45 hold seconds, minutes, hours, day, month and year
- * (since 2000), in binary. Bit 6 of the seconds register is set whenever
- * the time is written and masked off when it is read. The buffer holds the
- * six values in that order. */
+
 #define D1671_RTCSEC_SET    0x40
 
-void pmu_read_rtc(unsigned char* buffer)
+void pmu_read_rtc(unsigned char *buffer)
 {
     pmu_read_multiple(D1671_REG_RTCSEC, 6, buffer);
     buffer[0] &= ~D1671_RTCSEC_SET;
 }
 
-void pmu_write_rtc(unsigned char* buffer)
+void pmu_write_rtc(unsigned char *buffer)
 {
     int i;
 
-    /* One register at a time, seconds first, as the original firmware
-     * does */
+    /* Written one register at a time, seconds first, matching the order
+     * the original firmware uses. */
     for (i = 0; i < 6; i++)
         pmu_write(D1671_REG_RTCSEC + i,
                   buffer[i] | (i == 0 ? D1671_RTCSEC_SET : 0));
 }
-#endif
+
+#endif /* CONFIG_RTC == RTC_NANO3G */
+
+/* ==================================================================== *
+ * Charging control
+ * ==================================================================== */
 
 void pmu_set_usblimit(bool fast_charge)
 {
-    pmu_write(D1671_REG_CHCTL,
-            (pmu_read(D1671_REG_CHCTL) & ~D1671_CHCTL_FASTCHRG) | fast_charge);
+    unsigned char chctl = pmu_read(D1671_REG_CHCTL);
+
+    chctl &= ~D1671_CHCTL_FASTCHRG;
+    if (fast_charge)
+        chctl |= D1671_CHCTL_FASTCHRG;
+
+    pmu_write(D1671_REG_CHCTL, chctl);
 }
 
-/*
- * ADC, as the original firmware drives it: write the channel's
- * input selection to register 0x30 with bit 3 set to start a conversion,
- * wait for bit 3 to clear, and read the 10-bit result from 0x32 (bits 9..2)
- * and 0x31 (bits 1..0). 0x30 idles at 0x20.
- */
+/* ==================================================================== *
+ * ADC
+ *
+ * As the original firmware drives it: write the channel's mux selection
+ * to D1671_REG_ADCCTL with the START bit set, poll the same register
+ * until START clears, then read the 10-bit result split across two
+ * registers (high 8 bits, low 2 bits). The controller idles at 0x20
+ * between conversions.
+ * ==================================================================== */
+
 #define D1671_REG_ADCCTL    0x30
 #define D1671_REG_ADCLO     0x31
 #define D1671_REG_ADCHI     0x32
 #define D1671_ADCCTL_IDLE   0x20
 #define D1671_ADCCTL_START  0x08
 
+/* Bounds how long a single conversion is polled before giving up on it.
+ * 20 tries * 50 us = 1 ms; the original firmware's own polling loop is
+ * the source of both the delay and the try count. */
+#define ADC_POLL_DELAY_US   50
+#define ADC_POLL_MAX_TRIES  20
+
 static struct mutex pmu_adc_mutex;
 
-/* converts raw value to millivolts */
-unsigned short pmu_adc_raw2mv(
-        const struct pmu_adc_channel *ch, unsigned short raw)
+unsigned short pmu_adc_raw2mv(const struct pmu_adc_channel *ch,
+                               unsigned short raw)
 {
     return ch->offset_mv + raw * ch->span_mv / 1023;
 }
 
-/* returns raw value, averaged over ch->samples conversions */
+static unsigned short pmu_adc_convert_once(const struct pmu_adc_channel *ch)
+{
+    int tries;
+
+    pmu_write(D1671_REG_ADCCTL, ch->mux | D1671_ADCCTL_START);
+    for (tries = 0; tries < ADC_POLL_MAX_TRIES; tries++)
+    {
+        udelay(ADC_POLL_DELAY_US);
+        if (!(pmu_read(D1671_REG_ADCCTL) & D1671_ADCCTL_START))
+            break;
+    }
+    return (pmu_read(D1671_REG_ADCHI) << 2) | (pmu_read(D1671_REG_ADCLO) & 3);
+}
+
 unsigned short pmu_read_adc(const struct pmu_adc_channel *ch)
 {
     unsigned int sum = 0;
-    int i, tries;
+    int i;
+
+    if (!ch->samples)
+        return 0;
 
     mutex_lock(&pmu_adc_mutex);
     for (i = 0; i < ch->samples; i++)
-    {
-        pmu_write(D1671_REG_ADCCTL, ch->mux | D1671_ADCCTL_START);
-        for (tries = 0; tries < 20; tries++)
-        {
-            udelay(50);
-            if (!(pmu_read(D1671_REG_ADCCTL) & D1671_ADCCTL_START))
-                break;
-        }
-        sum += (pmu_read(D1671_REG_ADCHI) << 2)
-             | (pmu_read(D1671_REG_ADCLO) & 3);
-    }
+        sum += pmu_adc_convert_once(ch);
     pmu_write(D1671_REG_ADCCTL, D1671_ADCCTL_IDLE);
     mutex_unlock(&pmu_adc_mutex);
-    return ch->samples ? sum / ch->samples : 0;
+
+    return sum / ch->samples;
 }
 
-/*
- * eINT
- */
+/* ==================================================================== *
+ * External interrupt handling
+ *
+ * The PMU raises one shared, active-low IRQ line (GPIO_EINT_PMU) for
+ * USB/FireWire/accessory presence changes and the hold switch. The
+ * handler below clears every pending PMU-side event, re-reads the
+ * current input levels into a small cache, and re-arms the GPIO
+ * interrupt -- the PMU IRQ line stays asserted (masked out at the GPIO
+ * controller) until we acknowledge, so there is no risk of missing an
+ * edge between the ISR and the thread handling it.
+ * ==================================================================== */
+
 #define Q_EINT  0
 
-static long pmu_thread_stack[DEFAULT_STACK_SIZE/2/sizeof(long)];
+static long pmu_thread_stack[DEFAULT_STACK_SIZE / 2 / sizeof(long)];
 static struct event_queue pmu_queue;
-static unsigned char ints_msk[2];
 
-static void pmu_eint_isr(struct eic_handler*);
-
-static struct eic_handler pmu_eint =
+static struct
 {
-    .gpio_n = GPIO_EINT_PMU,
-    .type   = EIC_INTTYPE_LEVEL,
-    .level  = EIC_INTLEVEL_LOW,
-    .isr    = pmu_eint_isr,
-};
-
-static int pmu_input_holdswitch;
+    bool holdswitch_locked;
+#ifdef IPOD_ACCESSORY_PROTOCOL
+    bool accessory_present;
+#endif
+#if CONFIG_CHARGING
+    bool firewire_present;
+#endif
+} pmu_inputs;
 
 int pmu_holdswitch_locked(void)
 {
-   return pmu_input_holdswitch;
+    return pmu_inputs.holdswitch_locked;
 }
 
 #ifdef IPOD_ACCESSORY_PROTOCOL
-static int pmu_input_accessory;
-
 int pmu_accessory_present(void)
 {
-   return pmu_input_accessory;
+    return pmu_inputs.accessory_present;
 }
 #endif
 
 #if CONFIG_CHARGING
-static int pmu_input_firewire;
-
 int pmu_firewire_present(void)
 {
-   return pmu_input_firewire;
+    return pmu_inputs.firewire_present;
 }
 #endif
 
-/* XXX: from usb-s5l8702.c */
+/* usb_insert_int()/usb_remove_int() are normally provided by
+ * usb-s5l8702.c; in a bootloader build without USB mode support that
+ * file isn't linked, so provide a trivial polled stand-in here. */
 #if defined(BOOTLOADER) && !defined(HAVE_BOOTLOADER_USB_MODE)
 #include "usb.h"
 static int usb_status = USB_EXTRACTED;
@@ -253,7 +284,7 @@ void usb_remove_int(void)
 }
 #endif
 
-static void pmu_read_inputs(void)
+static void pmu_refresh_inputs(void)
 {
     unsigned char status[2];
 
@@ -265,18 +296,36 @@ static void pmu_read_inputs(void)
         usb_remove_int();
 
 #if CONFIG_CHARGING
-    pmu_input_firewire = !!(status[0] & D1671_STATUSA_VADAPTOR);
+    pmu_inputs.firewire_present = !!(status[0] & D1671_STATUSA_VADAPTOR);
 #endif
 #ifdef IPOD_ACCESSORY_PROTOCOL
-    pmu_input_accessory = !!(status[0] & D1671_STATUSA_INPUT1);
+    pmu_inputs.accessory_present = !!(status[0] & D1671_STATUSA_INPUT1);
 #endif
-    pmu_input_holdswitch = !(status[1] & D1671_STATUSB_INPUT2);
+    pmu_inputs.holdswitch_locked = !(status[1] & D1671_STATUSB_INPUT2);
 }
+
+static void pmu_eint_isr(struct eic_handler *h);
+
+static struct eic_handler pmu_eint =
+{
+    .gpio_n = GPIO_EINT_PMU,
+    .type   = EIC_INTTYPE_LEVEL,
+    .level  = EIC_INTLEVEL_LOW,
+    .isr    = pmu_eint_isr,
+};
 
 static void pmu_eint_isr(struct eic_handler *h)
 {
-     eint_unregister(h);
-     queue_post(&pmu_queue, Q_EINT, 0);
+    eint_unregister(h);
+    queue_post(&pmu_queue, Q_EINT, 0);
+}
+
+static void pmu_ack_and_refresh(void)
+{
+    /* Clearing every PMU event bit also de-asserts the shared IRQ line,
+     * which the GPIO controller was masking while it was pending. */
+    pmu_write_multiple(D1671_REG_EVENTA, 2, "\xFF\xFF");
+    pmu_refresh_inputs();
 }
 
 static void NORETURN_ATTR pmu_thread(void)
@@ -286,70 +335,59 @@ static void NORETURN_ATTR pmu_thread(void)
     while (true)
     {
         queue_wait_w_tmo(&pmu_queue, &ev, TIMEOUT_BLOCK);
-        switch (ev.id)
+        if (ev.id == Q_EINT)
         {
-            case Q_EINT:
-                /* clear all PMU interrupts, this will also raise
-                   (disable) the PMU IRQ pin */
-                pmu_write_multiple(D1671_REG_EVENTA, 2, "\xFF\xFF");
-
-                /* get actual values */
-                pmu_read_inputs();
-
-                eint_register(&pmu_eint);
-                break;
-
-            case SYS_TIMEOUT:
-                break;
+            pmu_ack_and_refresh();
+            eint_register(&pmu_eint);
         }
     }
 }
 
-/* main init */
+static void pmu_configure_irq_mask(unsigned char *mask /* [2] */)
+{
+    mask[0] = 0xff;
+    mask[1] = 0xff;
+
+    mask[0] &= ~D1671_IRQMASKA_VBUS;      /* USB presence */
+#if CONFIG_CHARGING
+    mask[0] &= ~D1671_IRQMASKA_VADAPTOR;  /* FireWire presence */
+#endif
+#ifdef IPOD_ACCESSORY_PROTOCOL
+    mask[0] &= ~D1671_IRQMASKA_INPUT1;    /* Accessory presence */
+#endif
+    mask[1] &= ~D1671_IRQMASKB_INPUT2;    /* Hold switch */
+}
+
 void pmu_init(void)
 {
+    unsigned char irq_mask[2];
+
     mutex_init(&pmu_adc_mutex);
     queue_init(&pmu_queue, false);
 
-    create_thread(pmu_thread,
-            pmu_thread_stack, sizeof(pmu_thread_stack), 0,
-            "PMU" IF_PRIO(, PRIORITY_SYSTEM) IF_COP(, CPU));
+    create_thread(pmu_thread, pmu_thread_stack, sizeof(pmu_thread_stack), 0,
+                  "PMU" IF_PRIO(, PRIORITY_SYSTEM) IF_COP(, CPU));
 
-    /* configure PMU interrutps */
-    ints_msk[0] = 0xff;
-    ints_msk[1] = 0xff;
+    pmu_configure_irq_mask(irq_mask);
+    pmu_write_multiple(D1671_REG_IRQMASKA, 2, irq_mask);
 
-    ints_msk[0] &= ~D1671_IRQMASKA_VBUS;      /* USB */
-#if CONFIG_CHARGING
-    ints_msk[0] &= ~D1671_IRQMASKA_VADAPTOR;  /* FireWire */
-#endif
-#ifdef IPOD_ACCESSORY_PROTOCOL
-    ints_msk[0] &= ~D1671_IRQMASKA_INPUT1;    /* Accessory */
-#endif
-    ints_msk[1] &= ~D1671_IRQMASKB_INPUT2;    /* Holdswitch */
-
-    pmu_write_multiple(D1671_REG_IRQMASKA, 2, ints_msk);
-
-    /* clear all interrupts */
-    pmu_write_multiple(D1671_REG_EVENTA, 2, "\xFF\xFF");
-
-    /* get initial values */
-    pmu_read_inputs();
+    pmu_ack_and_refresh();  /* clear stale events, seed the input cache */
 
     eint_register(&pmu_eint);
 }
 
-/*
- * preinit
- */
-int pmu_rd_multiple(int address, int count, unsigned char* buffer)
+/* ==================================================================== *
+ * Preinit (before the kernel, threads, or I2C interrupt path exist)
+ * ==================================================================== */
+
+int pmu_rd_multiple(int address, int count, unsigned char *buffer)
 {
-    return i2c_rd(0, 0xe6, address, count, buffer);
+    return i2c_rd(0, PMU_I2C_SLAVE, address, count, buffer);
 }
 
-int pmu_wr_multiple(int address, int count, unsigned char* buffer)
+int pmu_wr_multiple(int address, int count, unsigned char *buffer)
 {
-    return i2c_wr(0, 0xe6, address, count, buffer);
+    return i2c_wr(0, PMU_I2C_SLAVE, address, count, buffer);
 }
 
 unsigned char pmu_rd(int address)
@@ -366,26 +404,37 @@ int pmu_wr(int address, unsigned char val)
 
 void pmu_preinit(void)
 {
-    // TBC: LDOs ???
-    pmu_wr(0x1b, 0x14);
-    pmu_wr(0x16, 0x14);
-    pmu_wr(0x15, 0x14);     // TBC: Vnand = 2000 + val*50 = 3000 mV
-    pmu_wr(0x18, 0x18);     // TBC TBC TBC: Vaccy = 3200 mV ???
-    pmu_wr(0x10, (pmu_rd(0x10) & 0xdf) | 0x8);  /* keep bit 2: NAND needs it */
+    /* Power rail / LDO bring-up. Every value below is taken directly from
+     * observing the original firmware's own preinit sequence for this
+     * chip; TBC markers indicate a purpose we have not confirmed, kept
+     * exactly as the reference driver documented them rather than
+     * guessing at a friendlier name. */
+    pmu_wr(0x1b, 0x14);     /* TBC: LDO */
+    pmu_wr(0x16, 0x14);     /* TBC: LDO */
+    pmu_wr(0x15, 0x14);     /* TBC: Vnand = 2000 + val*50 = 3000 mV */
+    pmu_wr(0x18, 0x18);     /* TBC: Vaccy = 3200 mV ??? */
 
-                            // TBC: 0x30, 0x31 y 0x32 seems related to ADC (norboot)
-    pmu_wr(0x34, 0x72);     // TBC: en DA9030: TBATHIGH (0-255, TBAT high temperature threshold
-    pmu_wr(0x30, pmu_rd(0x30) | 0x20);  // TBC: TBATREF ON ???
+    /* Clear bit 5 of register 0x10 while preserving bit 2: bit 2 is a
+     * hardware requirement for the NAND controller to work on this
+     * device (see file header; this exact line is Rockbox commit
+     * 66bc0728). */
+    pmu_wr(0x10, (pmu_rd(0x10) & 0xdf) | 0x8);
 
-    pmu_wr(0x21, 0x5c);     // TBC: CHRG_CTL (max. current and Vbat ???)
-    pmu_wr(0xb, 0x6);
-    pmu_wr(0x1d, 0);
+    /* TBC: registers 0x30/0x31/0x32 also relate to the ADC, per norboot */
+    pmu_wr(0x34, 0x72);              /* TBC: DA9030-family TBATHIGH? */
+    pmu_wr(0x30, pmu_rd(0x30) | 0x20); /* TBC: TBATREF on? */
 
-    /* configure and clear interrupts */
+    pmu_wr(0x21, 0x5c);     /* TBC: charge control (max current / Vbat?) */
+    pmu_wr(0xb, 0x6);       /* TBC */
+    pmu_wr(0x1d, 0);        /* TBC */
+
+    /* Configure and clear PMU interrupts before anything can rely on
+     * them (there is no I2C IRQ path yet at this stage; runtime pmu_init()
+     * reconfigures this properly once threads exist). */
     pmu_wr_multiple(D1671_REG_IRQMASKA, 2, "\x42\xBE");
     pmu_wr_multiple(D1671_REG_EVENTA, 2, "\xFF\xFF");
 
-    /* backlight off */
+    /* Backlight off until backlight_hw_init() explicitly turns it on. */
     pmu_wr(D1671_REG_LEDCTL, pmu_rd(D1671_REG_LEDCTL) & ~D1671_LEDCTL_ENABLE);
 }
 

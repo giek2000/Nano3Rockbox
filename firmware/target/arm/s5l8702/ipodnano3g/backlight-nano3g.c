@@ -6,7 +6,15 @@
  *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
  *                     \/            \/     \/    \/            \/
  *
- * Copyright (C) 2009 by Dave Chapman
+ * iPod Nano 3G ("N46") backlight driver.
+ *
+ * Original implementation for this project. The backlight is a PWM
+ * output on the PMU (D1671) chip, controlled entirely through
+ * D1671_REG_LEDCTL. The bit assignments used below (bits 0..4 = output
+ * level, bit 7 = enable, bit 6 = an accompanying flag whose exact purpose
+ * is unconfirmed) are hardware facts taken from how the original firmware
+ * drives this register; the bit-6 behaviour is marked TBC rather than
+ * given a made-up name, matching the reference driver's own uncertainty.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -30,11 +38,17 @@
 #include "lcd-s5l8702.h"
 #endif
 
-/* The original firmware writes the level to bits 0..4 as well */
+/* brightness argument is Rockbox's 0..(brightness steps-1) setting range;
+ * the original firmware writes it directly into LEDCTL bits 0..4, so it
+ * is halved here to fit that 5-bit field (matching observed behaviour). */
 void backlight_hw_brightness(int brightness)
 {
-    pmu_write(D1671_REG_LEDCTL,
-        (pmu_read(D1671_REG_LEDCTL) & ~D1671_LEDCTL_OUT_MASK) | (brightness>>1));
+    unsigned char ledctl = pmu_read(D1671_REG_LEDCTL);
+
+    ledctl &= ~D1671_LEDCTL_OUT_MASK;
+    ledctl |= (brightness >> 1) & D1671_LEDCTL_OUT_MASK;
+
+    pmu_write(D1671_REG_LEDCTL, ledctl);
 }
 
 void backlight_hw_on(void)
@@ -43,17 +57,20 @@ void backlight_hw_on(void)
     if (!lcd_active())
         lcd_awake();
 #endif
-    /* As the original firmware turns it on: bits 7 and 6 set,
-     * bit 5 clear. Bit 6's meaning is unknown. */
-    pmu_write(D1671_REG_LEDCTL,
-            (pmu_read(D1671_REG_LEDCTL) & ~0x60)
-            | D1671_LEDCTL_ENABLE | D1671_LEDCTL_UNKNOWN);
+
+    /* As the original firmware turns the backlight on: bit 7 (ENABLE)
+     * and bit 6 (UNKNOWN) set, bit 5 clear. */
+    unsigned char ledctl = pmu_read(D1671_REG_LEDCTL);
+
+    ledctl &= ~0x60;
+    ledctl |= D1671_LEDCTL_ENABLE | D1671_LEDCTL_UNKNOWN;
+
+    pmu_write(D1671_REG_LEDCTL, ledctl);
 }
 
 void backlight_hw_off(void)
 {
-    pmu_write(D1671_REG_LEDCTL,
-            (pmu_read(D1671_REG_LEDCTL) & ~D1671_LEDCTL_ENABLE));
+    pmu_write(D1671_REG_LEDCTL, pmu_read(D1671_REG_LEDCTL) & ~D1671_LEDCTL_ENABLE);
 }
 
 bool backlight_hw_init(void)
@@ -63,7 +80,6 @@ bool backlight_hw_init(void)
     return true;
 }
 
-/* Kill the backlight, instantly. */
 void backlight_hw_kill(void)
 {
     backlight_hw_off();

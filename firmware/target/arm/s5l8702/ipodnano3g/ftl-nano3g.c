@@ -169,6 +169,10 @@ static bool mounted;
 static bool readonly_mount;
 static bool write_error_latched;
 
+/* Write-back cache reset; defined with the cache below but used by
+ * ftl_init() above it. */
+static void wb_reset(void);
+
 static void phys_to_bank_block(uint32_t phys, unsigned int *bank,
                                unsigned int *block)
 {
@@ -509,6 +513,10 @@ int ftl_init(void)
 {
     mounted = false;
     write_error_latched = false;
+    /* Drop any stale write-back cache from a previous mount before the
+     * scan below rebuilds block_map[]; a leftover wb_valid would alias a
+     * logical block against freshly scanned mappings. */
+    wb_reset();
 
     bank_count = nand_get_bank_count();
     if (bank_count == 0)
@@ -598,6 +606,150 @@ static int read_one_sector(uint32_t sector, void *buffer)
     return 0;
 }
 
+/* --- Single-block write-back cache -----------------------------------
+ *
+ * Why this exists. rewrite_logical_block() below rewrites an *entire*
+ * erase block (allocate + erase + program every one of ~128 pages, plus
+ * read-back of the old block for the pages not being changed) on every
+ * call, regardless of how few sectors actually changed. That is the
+ * crash-safety design (the old block stays intact until the new one is
+ * fully written), and it is fine for the occasional small write -- but a
+ * host file copy is pathological for it: the filesystem streams the
+ * sectors of one logical block as many separate storage_write_sectors()
+ * calls (and interleaves small FAT/directory updates), so a single
+ * logical block can be rewritten from scratch dozens of times as its
+ * sectors arrive one chunk at a time. Measured result: ~7.5 KB/s and
+ * multi-minute stalls that trip the host's USB write timeout and abort
+ * the copy mid-stream.
+ *
+ * The cache collapses that. It holds exactly one logical block's worth
+ * of sectors in RAM. Writes that hit the cached block just update RAM;
+ * only when the write moves to a *different* logical block (or the host
+ * issues SYNCHRONIZE CACHE, or the device is unmounted) is the cached
+ * block committed to NAND with a single rewrite_logical_block() call. A
+ * sequential file write therefore costs ~1 full-block rewrite per block
+ * instead of ~128.
+ *
+ * Crash-safety is unchanged. The actual commit still goes through
+ * rewrite_logical_block(), which never retires the old physical block
+ * until the new one is completely written. The one new window is "data
+ * acknowledged to the host but still only in RAM" -- which is exactly
+ * what ftl_sync() (SCSI SYNCHRONIZE CACHE, and nand_close() on unplug)
+ * exists to close, the same contract every write-back cache relies on.
+ * A power loss with an unflushed cache loses only the not-yet-synced
+ * tail, and leaves the previous generation of every block fully intact;
+ * it can never corrupt an already-committed block.
+ *
+ * RAM cost is one logical block: sectors_per_block * NAND_PAGE_SIZE =
+ * 128 * 2048 = 256 KB on this chip, out of 32 MB. The buffer is sized to
+ * the static maximum so it needs no heap.
+ *
+ * Concurrency: like the rest of this file, this is non-reentrant and
+ * relies on all storage calls being serialised on the one storage/USB
+ * thread (see the module-state note on block_map[] etc.). */
+
+/* One logical block, at the static worst case (max pages/block * max
+ * sectors/page * sector size). Carries FTL_DMA_BUF_ATTR because on flush
+ * its pages are handed straight to nand_hw_write_page(). */
+static uint8_t  wb_data[FTL_MAX_PAGES_PER_BLOCK * NAND_MAX_PAGE_SIZE]
+                    FTL_DMA_BUF_ATTR;
+static unsigned int wb_logical_block;   /* which logical block is cached */
+static bool         wb_valid;           /* is a block currently cached? */
+static bool         wb_dirty;           /* does it differ from NAND? */
+
+static int rewrite_logical_block(unsigned int logical_block,
+                                 unsigned int first_sector_in_block,
+                                 unsigned int count,
+                                 const uint8_t *buffer);
+
+static void wb_reset(void)
+{
+    wb_valid = false;
+    wb_dirty = false;
+    wb_logical_block = 0;
+}
+
+/* Commit the cached block to NAND if it has unwritten changes. Returns 0
+ * on success (or if there was nothing to flush), -1 on write failure with
+ * the error latched -- matching the rest of the write path. */
+static int wb_flush(void)
+{
+    if (!wb_valid || !wb_dirty)
+        return 0;
+
+    /* Commit the whole cached block in one rewrite. Passing the entire
+     * block as the changed range means rewrite_logical_block() takes its
+     * data purely from wb_data and never re-reads the old block -- the
+     * cache already holds the merged, up-to-date contents. */
+    if (rewrite_logical_block(wb_logical_block, 0, sectors_per_block,
+                              wb_data) != 0)
+    {
+        /* Leave the cache marked dirty so a later ftl_sync() can surface
+         * the failure again rather than silently dropping the data. */
+        write_error_latched = true;
+        return -1;
+    }
+
+    wb_dirty = false;
+    return 0;
+}
+
+/* Load `logical_block` into the cache, flushing whatever was there first.
+ * The cache is filled from the block's current mapped contents (or 0xFF
+ * where unmapped) so that subsequent partial writes merge correctly and
+ * reads are served consistently. Returns 0, or -1 if flushing the
+ * previous block failed. */
+static int wb_load(unsigned int logical_block)
+{
+    unsigned int page;
+    uint32_t phys;
+    unsigned int bank, block;
+    /* static: see mark_bad_best_effort()'s comment on why page/spare
+     * buffers here are module-static rather than stack locals. */
+    static uint8_t data[NAND_MAX_PAGE_SIZE] FTL_DMA_BUF_ATTR;
+
+    if (wb_valid && wb_logical_block == logical_block)
+        return 0;
+
+    if (wb_flush() != 0)
+        return -1;
+
+    phys = block_map[logical_block];
+    if (phys == FTL_UNMAPPED)
+    {
+        /* Never-written block: reads back as erased. */
+        memset(wb_data, 0xFF, (size_t)sectors_per_block * NAND_PAGE_SIZE);
+    }
+    else
+    {
+        phys_to_bank_block(phys, &bank, &block);
+        for (page = 0; page < chip_geo->pages_per_block; page++)
+        {
+            uint8_t *dst = wb_data + (size_t)page * chip_geo->page_size;
+            int rc = nand_hw_read_page(bank,
+                        block * chip_geo->pages_per_block + page, data, NULL);
+            if (nand_read_page_untrusted(rc))
+            {
+                /* Unreadable/uncorrectable page: fill with the erased
+                 * pattern rather than fail the load, mirroring
+                 * rewrite_logical_block()'s own handling of a degraded
+                 * old copy. The sectors the caller is about to write are
+                 * overwritten anyway; the rest read back as erased. */
+                memset(dst, 0xFF, chip_geo->page_size);
+            }
+            else
+            {
+                memcpy(dst, data, chip_geo->page_size);
+            }
+        }
+    }
+
+    wb_logical_block = logical_block;
+    wb_valid = true;
+    wb_dirty = false;
+    return 0;
+}
+
 int ftl_read(uint32_t sector, uint32_t count, void *buffer)
 {
     uint8_t *out = (uint8_t *)buffer;
@@ -607,9 +759,23 @@ int ftl_read(uint32_t sector, uint32_t count, void *buffer)
 
     while (count--)
     {
-        int rc = read_one_sector(sector, out);
-        if (rc < 0)
-            return rc;
+        unsigned int logical_block = sector / sectors_per_block;
+        unsigned int sector_in_block = sector % sectors_per_block;
+
+        /* Serve from the write-back cache when this sector belongs to the
+         * currently cached block, so reads see writes that have been
+         * acknowledged but not yet committed to NAND. */
+        if (wb_valid && logical_block == wb_logical_block)
+        {
+            memcpy(out, wb_data + (size_t)sector_in_block * NAND_PAGE_SIZE,
+                   NAND_PAGE_SIZE);
+        }
+        else
+        {
+            int rc = read_one_sector(sector, out);
+            if (rc < 0)
+                return rc;
+        }
         sector++;
         out += NAND_PAGE_SIZE;
     }
@@ -810,12 +976,23 @@ int ftl_write(uint32_t sector, uint32_t count, const void *buffer)
             return -1;
         }
 
-        if (rewrite_logical_block(logical_block, sector_in_block, run, in) != 0)
+        /* Route through the write-back cache: bring this logical block
+         * into RAM (flushing any previously cached block first), then
+         * merge the new sectors into it. The expensive full-block NAND
+         * rewrite happens only when the cache later moves to a different
+         * block or is flushed by ftl_sync(). A file copy that streams the
+         * sectors of one block across many calls therefore commits that
+         * block once, not once per call. */
+        if (wb_load(logical_block) != 0)
         {
-            nand_debug_log("ftl_write: rewrite lb=%u failed", logical_block);
+            nand_debug_log("ftl_write: wb_load lb=%u failed", logical_block);
             write_error_latched = true;
             return -1;
         }
+
+        memcpy(wb_data + (size_t)sector_in_block * NAND_PAGE_SIZE, in,
+               (size_t)run * NAND_PAGE_SIZE);
+        wb_dirty = true;
 
         sector += run;
         count -= run;
@@ -827,9 +1004,14 @@ int ftl_write(uint32_t sector, uint32_t count, const void *buffer)
 
 int ftl_sync(void)
 {
-    /* ftl_write() commits every block synchronously, so there is nothing
-     * outstanding to flush; just surface any latent error from the last
-     * write, matching the documented contract in ftl-target.h. */
+    /* Commit the write-back cache. This is the point that closes the
+     * "acknowledged to the host but only in RAM" window: the host issues
+     * SCSI SYNCHRONIZE CACHE after writes and around format/dismount
+     * (see usb_storage.c), and nand_close() calls it on unplug. After a
+     * successful flush there is nothing outstanding; surface any latched
+     * error either way, matching the contract in ftl-target.h. */
+    if (wb_flush() != 0)
+        return -1;
     return write_error_latched ? -1 : 0;
 }
 

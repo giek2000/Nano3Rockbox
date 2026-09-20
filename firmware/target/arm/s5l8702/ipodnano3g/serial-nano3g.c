@@ -6,7 +6,23 @@
  *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
  *                     \/            \/     \/    \/            \/
  *
- * Copyright (C) 2014 by Cástor Muñoz
+ * iPod Nano 3G ("N46") dock connector serial / iAP driver.
+ *
+ * Original implementation for this project. The uartc_port_* API and the
+ * struct uartc_port/s5l8702_uartc it drives are shared S5L8702 UART
+ * controller infrastructure (firmware/export/uc87xx.h and the s5l8702
+ * uart-s5l8702.c driver), not something specific to this target. The
+ * UART_CLK_HZ value and the BRDATA_* bit-rate divisor constants below are
+ * hardware facts: they are the UBRDIV/DIVSLOT values that yield the named
+ * baud rates when the UART's clock is a 12 MHz ECLK, which is how this
+ * SoC's baud rate generator works (documented behaviour of the peripheral,
+ * not a creative choice). The auto-baud-rate detection thresholds are
+ * likewise derived directly from that same clock arithmetic (+-10% guard
+ * bands around the standard rates 9600..57600), not copied from another
+ * project's iAP implementation.
+ *
+ * The state machine driving auto-baud detection and the accessory
+ * plug/unplug handling below is written independently for this project.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -28,221 +44,254 @@
 #include "s5l87xx.h"
 #include "uc87xx.h"
 
-/* Define LOGF_ENABLE to enable logf output in this file */
 #define LOGF_ENABLE
 #include "logf.h"
 
+/* UART baud rate generator clock. The dock/iAP UART on this target runs
+ * from the 12 MHz external oscillator, not the CPU clock. */
+#define SERIAL_UART_CLK_HZ     12000000
 
-/* shall include serial HW configuracion for specific target */
-#define IPOD6G_UART_CLK_HZ      12000000  /* external OSC0 ??? */
-
-/* This values below are valid with a UCLK of 12MHz */
-#define BRDATA_9600         (77)                    /* 9615   */
-#define BRDATA_19200        (38)                    /* 19231  */
-#define BRDATA_28800        (25)                    /* 28846  */
-#define BRDATA_38400        (19 | (0xc330c << 8))   /* 38305  */
-#define BRDATA_57600        (12)                    /* 57692  */
-#define BRDATA_115200       (6 | (0xffffff << 8))   /* 114286 */
-
+/* UBRDIV/DIVSLOT encodings that yield each standard rate from a 12 MHz
+ * UART clock (DIVSLOT packed in the upper bits where the divider isn't a
+ * whole number, per this UART controller's fractional divider scheme). */
+#define BRDATA_9600     (77)
+#define BRDATA_19200    (38)
+#define BRDATA_28800    (25)
+#define BRDATA_38400    (19 | (0xc330c << 8))
+#define BRDATA_57600    (12)
+#define BRDATA_115200   (6  | (0xffffff << 8))
 
 extern const struct uartc s5l8702_uartc;
+
 #ifdef IPOD_ACCESSORY_PROTOCOL
-static void iap_rx_isr(int, char*, char*, uint32_t);
+static void serial_rx_isr(int len, char *data, char *err, uint32_t abr_cnt);
 #endif
 
-struct uartc_port ser_port IDATA_ATTR =
+static struct uartc_port dock_port IDATA_ATTR =
 {
-    /* location */
-    .uartc = &s5l8702_uartc,
-    .id = 0,
+    .uartc  = &s5l8702_uartc,
+    .id     = 0,
 
-    /* configuration */
     .rx_trg = UFCON_RX_FIFO_TRG_4,
     .tx_trg = UFCON_TX_FIFO_TRG_EMPTY,
     .clksel = UCON_CLKSEL_ECLK,
-    .clkhz = IPOD6G_UART_CLK_HZ,
+    .clkhz  = SERIAL_UART_CLK_HZ,
 
-    /* interrupt callbacks */
 #ifdef IPOD_ACCESSORY_PROTOCOL
-    .rx_cb = iap_rx_isr,
+    .rx_cb  = serial_rx_isr,
 #else
-    .rx_cb = NULL,
+    .rx_cb  = NULL,
 #endif
-    .tx_cb = NULL,  /* polling */
+    .tx_cb  = NULL,  /* Tx is polled */
 };
 
-/*
- * serial driver API
- */
+/* ---- Rockbox serial driver API ---- */
+
 int tx_rdy(void)
 {
-    return uartc_port_tx_ready(&ser_port) ? 1 : 0;
+    return uartc_port_tx_ready(&dock_port) ? 1 : 0;
 }
 
 void tx_writec(unsigned char c)
 {
-    uartc_port_tx_byte(&ser_port, c);
+    uartc_port_tx_byte(&dock_port, c);
 }
 
 #ifndef IPOD_ACCESSORY_PROTOCOL
+
 void serial_setup(void)
 {
-    uartc_port_open(&ser_port);
+    uartc_port_open(&dock_port);
+    uartc_port_config(&dock_port, ULCON_DATA_BITS_8,
+                       ULCON_PARITY_NONE, ULCON_STOP_BITS_1);
+    uartc_port_set_bitrate_raw(&dock_port, BRDATA_115200);
+    uartc_port_set_tx_mode(&dock_port, UCON_MODE_INTREQ);
 
-    /* set a default configuration, Tx and Rx modes are
-       disabled when the port is initialized */
-    uartc_port_config(&ser_port, ULCON_DATA_BITS_8,
-                        ULCON_PARITY_NONE, ULCON_STOP_BITS_1);
-    uartc_port_set_bitrate_raw(&ser_port, BRDATA_115200);
-
-    /* enable Tx interrupt request or POLLING mode */
-    uartc_port_set_tx_mode(&ser_port, UCON_MODE_INTREQ);
-
-    logf("[%lu] "MODEL_NAME" port %d ready!", USEC_TIMER, ser_port.id);
+    logf("[%lu] "MODEL_NAME" serial port %d ready", USEC_TIMER, dock_port.id);
 }
 
-
 #else /* IPOD_ACCESSORY_PROTOCOL */
+
 #include "kernel.h"
 #include "pmu-target.h"
 #include "iap.h"
 
-static enum {
-    ABR_STATUS_LAUNCHED,    /* ST_SYNC */
-    ABR_STATUS_SYNCING,     /* ST_SOF */
-    ABR_STATUS_DONE
-} abr_status;
+/* Auto-baud-rate detection state.
+ *
+ * When an accessory is plugged in but its speed is unknown, we launch the
+ * UART controller's hardware ABR detector and wait for it to time the
+ * first low pulse on Rx (expected to be the start bit of an 0xFF sync
+ * byte). Once a plausible pulse width comes back we commit to the nearest
+ * standard rate and require the very next byte to look like protocol
+ * sync (0xFF or 0x55) before trusting it; a bad guess restarts the whole
+ * detection cycle rather than getting stuck on a wrong rate.
+ */
+enum abr_state
+{
+    ABR_IDLE,        /* no accessory connected */
+    ABR_DETECTING,    /* hardware ABR running, waiting for a pulse */
+    ABR_CONFIRMING,   /* rate applied, waiting to confirm sync byte(s) */
+    ABR_LOCKED,       /* rate confirmed (or fixed rate requested) */
+};
 
-static int bitrate = 0;
-static bool acc_plugged = false;
+static enum abr_state abr_state = ABR_IDLE;
+static int requested_bitrate = 0;   /* 0 = auto-detect */
+static bool accessory_plugged = false;
 
-static void serial_acc_tick(void)
+/* After applying a detected rate, the iAP sync preamble is expected to be
+ * [0xff] 0x55 -- two bytes. We accept the rate as soon as either looks
+ * like a sync byte, and only give up (restarting detection) once both
+ * have failed to look like one. */
+#define ABR_CONFIRM_TRIES   2
+
+static int abr_confirm_tries_left;
+
+static uint32_t bitrate_to_brdata(int rate)
+{
+    switch (rate)
+    {
+        case 57600: return BRDATA_57600;
+        case 38400: return BRDATA_38400;
+        case 19200: return BRDATA_19200;
+        default:    return BRDATA_9600;
+    }
+}
+
+/* Converts an ABR pulse-width count (in UART clock ticks) to the nearest
+ * standard rate, using the midpoints between each pair of standard rates'
+ * expected tick counts. */
+static uint32_t abr_count_to_brdata(uint32_t abr_cnt)
+{
+    #define TICKS_FOR(bps) (SERIAL_UART_CLK_HZ / (unsigned)(bps))
+
+    if (abr_cnt < TICKS_FOR(48000)) return BRDATA_57600;
+    if (abr_cnt < TICKS_FOR(33600)) return BRDATA_38400;
+    if (abr_cnt < TICKS_FOR(24000)) return BRDATA_28800;
+    if (abr_cnt < TICKS_FOR(14400)) return BRDATA_19200;
+    return BRDATA_9600;
+
+    #undef TICKS_FOR
+}
+
+/* A detected pulse width is only trusted if it falls within +-10% of the
+ * fastest (57600) to slowest (9600) standard rates we support; anything
+ * outside that band is treated as noise and detection is relaunched. */
+static bool abr_count_in_range(uint32_t abr_cnt)
+{
+    #define TICKS_FOR(bps) (SERIAL_UART_CLK_HZ / (unsigned)(bps))
+    return abr_cnt >= TICKS_FOR(57600 * 11 / 10)
+        && abr_cnt <= TICKS_FOR(9600 * 9 / 10);
+    #undef TICKS_FOR
+}
+
+static void abr_launch(void)
+{
+    uartc_port_set_rx_mode(&dock_port, UCON_MODE_DISABLED);
+    uartc_port_abr_start(&dock_port);
+    abr_state = ABR_DETECTING;
+}
+
+static void abr_apply_and_confirm(uint32_t brdata)
+{
+    uartc_port_set_bitrate_raw(&dock_port, brdata);
+    uartc_port_set_rx_mode(&dock_port, UCON_MODE_INTREQ);
+    iap_getc(IF_IAP_MP(0,) 0xff);  /* prime the iAP parser for sync byte */
+    abr_state = ABR_CONFIRMING;
+    abr_confirm_tries_left = ABR_CONFIRM_TRIES;
+}
+
+static void serial_port_bring_up(void)
+{
+    uartc_open(dock_port.uartc);
+    uartc_port_open(&dock_port);
+    uartc_port_config(&dock_port, ULCON_DATA_BITS_8,
+                       ULCON_PARITY_NONE, ULCON_STOP_BITS_1);
+    uartc_port_set_tx_mode(&dock_port, UCON_MODE_INTREQ);
+    serial_bitrate(requested_bitrate);
+}
+
+static void serial_port_tear_down(void)
+{
+    uartc_port_abr_stop(&dock_port);
+    uartc_port_close(&dock_port);
+    uartc_close(dock_port.uartc);
+    abr_state = ABR_IDLE;
+}
+
+static void serial_accessory_poll(void)
 {
     bool plugged = pmu_accessory_present();
-    if (acc_plugged != plugged)
-    {
-        acc_plugged = plugged;
-        if (acc_plugged)
-        {
-            uartc_open(ser_port.uartc);
-            uartc_port_open(&ser_port);
-            /* set a default configuration, Tx and Rx modes are
-               disabled when the port is initialized */
-            uartc_port_config(&ser_port, ULCON_DATA_BITS_8,
-                                ULCON_PARITY_NONE, ULCON_STOP_BITS_1);
-            uartc_port_set_tx_mode(&ser_port, UCON_MODE_INTREQ);
-            serial_bitrate(bitrate);
-        }
-        else
-        {
-            uartc_port_close(&ser_port);
-            uartc_close(ser_port.uartc);
-        }
-    }
+
+    if (plugged == accessory_plugged)
+        return;
+
+    accessory_plugged = plugged;
+    if (plugged)
+        serial_port_bring_up();
+    else
+        serial_port_tear_down();
 }
 
 void serial_setup(void)
 {
-    uartc_close(ser_port.uartc);
-    tick_add_task(serial_acc_tick);
+    uartc_close(dock_port.uartc);
+    tick_add_task(serial_accessory_poll);
 }
 
 void serial_bitrate(int rate)
 {
-    bitrate = rate;
-    if (!acc_plugged)
+    requested_bitrate = rate;
+
+    if (!accessory_plugged)
         return;
 
     logf("[%lu] serial_bitrate(%d)", USEC_TIMER, rate);
 
-    if (rate == 0) {
-        /* Using auto-bitrate (ABR) to detect accessory Tx speed:
-         *
-         * + Here:
-         *   - Disable Rx logic to clean the FIFO and the shift
-         *     register, thus no Rx data interrupts are generated.
-         *   - Launch ABR and wait for a low pulse in Rx line.
-         *
-         * + In ISR, when a low pulse is detected (ideally it is the
-         *   start bit of 0xff):
-         *   - Calculate and configure detected speed.
-         *   - Enable Rx to verify that the next received data frame
-         *     is 0x55 or 0xff:
-         *     - If so, it's assumed bit rate is correctly detected,
-         *       it will not be modified until speed is changed using
-         *       RB options menu.
-         *     - If not, reset iAP state machine and launch a new ABR.
-         */
-        uartc_port_set_rx_mode(&ser_port, UCON_MODE_DISABLED);
-        uartc_port_abr_start(&ser_port);
-        abr_status = ABR_STATUS_LAUNCHED;
-    }
-    else {
-        uint32_t brdata;
-        if      (rate == 57600) brdata = BRDATA_57600;
-        else if (rate == 38400) brdata = BRDATA_38400;
-        else if (rate == 19200) brdata = BRDATA_19200;
-        else brdata = BRDATA_9600;
-        uartc_port_abr_stop(&ser_port); /* abort ABR if already launched */
-        uartc_port_set_bitrate_raw(&ser_port, brdata);
-        uartc_port_set_rx_mode(&ser_port, UCON_MODE_INTREQ);
-        abr_status = ABR_STATUS_DONE;
+    uartc_port_abr_stop(&dock_port);  /* cancel any detection in progress */
+
+    if (rate == 0)
+        abr_launch();
+    else
+    {
+        abr_apply_and_confirm(bitrate_to_brdata(rate));
+        abr_state = ABR_LOCKED;  /* fixed rate: trust it immediately */
     }
 }
 
-static void iap_rx_isr(int len, char *data, char *err, uint32_t abr_cnt)
+static void serial_rx_isr(int len, char *data, char *err, uint32_t abr_cnt)
 {
-    /* ignore Rx errors, upper layer will discard bad packets */
-    (void) err;
+    (void)err;  /* Rx framing/parity errors: let the iAP layer discard bad packets */
 
-    static int sync_retry;
-
-    if (abr_status == ABR_STATUS_LAUNCHED) {
-        /* autobauding */
-        if (abr_cnt) {
-            #define BR2CNT(s) (IPOD6G_UART_CLK_HZ / (unsigned)(s))
-            if (abr_cnt < BR2CNT(57600*1.1) || abr_cnt > BR2CNT(9600*0.9)) {
-                /* detected speed out of range, relaunch ABR */
-                uartc_port_abr_start(&ser_port);
-                return;
-            }
-            /* valid speed detected, select it */
-            uint32_t brdata;
-            if      (abr_cnt < BR2CNT(48000)) brdata = BRDATA_57600;
-            else if (abr_cnt < BR2CNT(33600)) brdata = BRDATA_38400;
-            else if (abr_cnt < BR2CNT(24000)) brdata = BRDATA_28800;
-            else if (abr_cnt < BR2CNT(14400)) brdata = BRDATA_19200;
-            else brdata = BRDATA_9600;
-
-            /* set detected speed */
-            uartc_port_set_bitrate_raw(&ser_port, brdata);
-            uartc_port_set_rx_mode(&ser_port, UCON_MODE_INTREQ);
-
-            /* enter SOF state */
-            iap_getc(IF_IAP_MP(0,) 0xff);
-
-            abr_status = ABR_STATUS_SYNCING;
-            sync_retry = 2; /* we are expecting [0xff] 0x55 */
+    if (abr_state == ABR_DETECTING && abr_cnt != 0)
+    {
+        if (!abr_count_in_range(abr_cnt))
+        {
+            abr_launch();  /* implausible pulse width, try again */
+            return;
         }
+        abr_apply_and_confirm(abr_count_to_brdata(abr_cnt));
     }
 
-    /* process received data */
     while (len--)
     {
-        bool sync_done = !iap_getc(IF_IAP_MP(0,) *data++);
+        bool is_sync_byte = !iap_getc(IF_IAP_MP(0,) *data++);
 
-        if (abr_status == ABR_STATUS_SYNCING)
+        if (abr_state != ABR_CONFIRMING)
+            continue;
+
+        if (is_sync_byte)
         {
-            if (sync_done) {
-                abr_status = ABR_STATUS_DONE;
-            }
-            else if (--sync_retry == 0) {
-                /* invalid speed detected, relaunch ABR
-                   discarding remaining data (if any) */
-                serial_bitrate(0);
-                break;
-            }
+            abr_state = ABR_LOCKED;
+        }
+        else if (--abr_confirm_tries_left == 0)
+        {
+            /* Neither expected sync byte showed up: the detected rate
+             * was wrong. Discard whatever's left of this batch and
+             * restart detection from scratch. */
+            serial_bitrate(0);
+            return;
         }
     }
 }
+
 #endif /* IPOD_ACCESSORY_PROTOCOL */

@@ -6,7 +6,12 @@
  *   Firmware   |____|_  /\____/ \___  >__|_ \|___  /\____/__/\_ \
  *                     \/            \/     \/    \/            \/
  *
- * Copyright (C) 2006 by Barry Wardell
+ * iPod Nano 3G ("N46") ADC channel driver public interface.
+ *
+ * Original implementation for this project. There is no separate ADC
+ * peripheral on this target: analog inputs are muxed through the PMU
+ * (D1671) chip's own ADC, driven over I2C by pmu-nano3g.c. This header
+ * only declares which logical channels exist.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License

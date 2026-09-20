@@ -262,6 +262,30 @@ static void nand_check_print(const char *report)
         "blocks_unreliable", "validated", "recognized", "diagonly", "ftl",
         "verdict", "model", "swvr", "rawid", "probestop", "diagbanks",
         "wtest", "wsweep",
+#ifdef FTL_APPLE_COMPAT
+        /* Apple-compat read-only mount diagnostic (see ftl-apple-nano3g.c
+         * and nand-check-nano3g.c's FTL_APPLE_COMPAT block). Shown on the
+         * LCD so the mount result is photographable without needing the
+         * sector-0 USB read, which does not reliably enumerate here. */
+        "apple_dl", "apple_dl0", "apple_dl1", "apple_dl2", "apple_dl3",
+        "apple_dl4",
+        "apple_bd",
+        "apple_bd0", "apple_bd1", "apple_bd2", "apple_bd3", "apple_bd4",
+        "apple_bd5", "apple_bd6", "apple_bd7", "apple_bd8", "apple_bd9",
+        "apple_bd10", "apple_bd11", "apple_bd12", "apple_bd13", "apple_bd14",
+        "apple_bd15",
+        "apple_tm",
+        /* read-only full-mount probe (APPLE_READ_MOUNT_ONLY) */
+        "apple_mnt", "apple_sec", "apple_s0", "apple_s0h", "apple_s0sig",
+        "apple_scan", "apple_nzh", "apple_low", "apple_lowh", "apple_sigh",
+        "apple_ftlc", "apple_ftlu", "apple_ca0", "apple_ca1", "apple_ca2",
+        "apple_lay", "apple_rmp", "apple_rm", "apple_uc",
+        /* compact mount summary + typemap (APPLE_TYPEMAP_ONLY build) */
+        "apple_mount", "apple_ftl_mounted", "apple_banks", "apple_pagesize",
+        "apple_ppblock", "apple_blocks", "apple_userblocks_provisional",
+        "apple_vflusn", "apple_ftlctrl", "apple_spare0",
+        "apple_devinfo_captured",
+#endif
     };
     static char text[SECTOR_SIZE];
     char *p, *nl, *sp;
@@ -286,6 +310,79 @@ static void nand_check_print(const char *report)
                 printf("%s", p);
     }
 }
+
+#ifdef FTL_APPLE_COMPAT
+/* Paged, photographable view of the Apple diagnostic lines. The USB
+ * sector-0 read has proven unreliable on this host (the mass-storage
+ * function enumerates but Windows creates no disk object), and the plain
+ * nand_check_print() scrolls lines off the top. This shows every "apple_"
+ * report line 8 at a time, advanced with SELECT (MENU exits), so each page
+ * can be photographed. Read-only; just reformats the already-built report. */
+static void show_apple_report(const char *report)
+{
+    static char text[SECTOR_SIZE];
+    /* line offsets into text[] for lines beginning with "apple_" */
+    static const char *lines[64];
+    unsigned int nlines = 0;
+    char *p, *nl;
+    unsigned int lines_per_page = 8;
+    unsigned int page = 0, total_pages;
+
+    strlcpy(text, report, sizeof(text));
+    for (p = text; (nl = strchr(p, '\n')); p = nl + 1)
+    {
+        *nl = '\0';
+        if (!strncmp(p, "apple_", 6) && nlines < ARRAYLEN(lines))
+            lines[nlines++] = p;
+    }
+    /* trailing line without a newline */
+    if (*p && !strncmp(p, "apple_", 6) && nlines < ARRAYLEN(lines))
+        lines[nlines++] = p;
+
+    if (nlines == 0)
+        return;
+
+    total_pages = (nlines + lines_per_page - 1) / lines_per_page;
+
+    while (1)
+    {
+        unsigned int start = page * lines_per_page;
+        unsigned int end = start + lines_per_page;
+        unsigned int i;
+        int btn;
+
+        if (end > nlines)
+            end = nlines;
+
+        lcd_clear_display();
+        nand_check_light();
+        lcd_set_foreground(LCD_RBYELLOW);
+        line = 0;
+        printf("apple report %u/%u", page + 1, total_pages);
+        lcd_set_foreground(LCD_WHITE);
+        for (i = start; i < end; i++)
+            printf("%s", lines[i]);
+        lcd_set_foreground(LCD_RBYELLOW);
+        printf("SELECT: next  MENU: done");
+        lcd_update();
+
+        while (button_status() != BUTTON_NONE)
+            sleep(HZ / 100);
+        while (1)
+        {
+            btn = button_status();
+            if (btn == BUTTON_SELECT)
+            {
+                page = (page + 1) % total_pages;
+                break;
+            }
+            if (btn == BUTTON_MENU)
+                return;
+            sleep(HZ / 100);
+        }
+    }
+}
+#endif /* FTL_APPLE_COMPAT */
 
 static void nand_check(void)
 {
@@ -358,34 +455,56 @@ static void nand_check(void)
     printf("Press+hold SELECT to write-test");
     printf("(destroys one block!) else wait");
     {
-        /* Two separate windows, not one: first give the user real time
-         * to move their finger to the button at all (this used to
-         * require SELECT to already be held the instant this code ran,
-         * which broke out on the very first poll -- effectively zero
-         * reaction time, confirmed by the user as "too quick to act on"
-         * on real hardware), then require a deliberate 2-second hold
-         * once they've started pressing, so a brief accidental tap still
-         * doesn't trigger a real erase/write. */
+        /* Two separate windows, not one: first give the user generous time
+         * to press SELECT at all -- with a VISIBLE per-second countdown so
+         * it's obvious the device is waiting and how long is left (the
+         * earlier version waited silently, which read as "the prompt went
+         * by too quick" on real hardware) -- then require a short
+         * continuous hold once they've started, so a brief accidental tap
+         * still doesn't trigger a real erase/write. */
+        const int WAIT_SECS = 30;   /* plenty of time to react */
+        const int HOLD_TENTHS = 15; /* ~1.5s continuous hold to confirm */
         int waited = 0;
         bool pressed = false;
 
-        while (waited < 100) /* up to ~10s to press SELECT at all */
+        /* Visible countdown so it's obvious the device is waiting and how
+         * long is left. Uses the file's printf() row mechanism (which owns
+         * the row cursor); we print one countdown line per second, and it's
+         * fine that they scroll -- the point is that SOMETHING visibly ticks
+         * down, unlike the earlier silent wait that "went by too quick". */
+        lcd_set_foreground(LCD_RBYELLOW);
+        int last_shown = -1;
+        while (waited < WAIT_SECS * 10) /* poll at 10 Hz */
         {
             if (button_status() == BUTTON_SELECT)
             {
                 pressed = true;
                 break;
             }
+            /* Print a milestone only every 5 s (and the final 5,4,3,2,1),
+             * so the report above stays readable rather than scrolling off
+             * under 30 one-per-second lines. */
+            int secs_left = WAIT_SECS - waited / 10;
+            if (secs_left != last_shown &&
+                (secs_left <= 5 || secs_left % 5 == 0))
+            {
+                printf("hold SELECT now... %d s left", secs_left);
+                last_shown = secs_left;
+            }
             sleep(HZ / 10);
             waited++;
         }
+        lcd_set_foreground(LCD_WHITE);
 
         bool held_through = false;
         if (pressed)
         {
             int held = 0;
             held_through = true;
-            while (held < 20) /* ~2s continuous hold, once started */
+            lcd_set_foreground(LCD_GREEN);
+            printf("SELECT held - keep holding...");
+            lcd_set_foreground(LCD_WHITE);
+            while (held < HOLD_TENTHS) /* continuous hold to confirm */
             {
                 if (button_status() != BUTTON_SELECT)
                 {
@@ -395,6 +514,10 @@ static void nand_check(void)
                 sleep(HZ / 10);
                 held++;
             }
+        }
+        else
+        {
+            printf("no write-test; identify only");
         }
 
         if (held_through)
@@ -443,6 +566,12 @@ static void nand_check(void)
 #endif
 
     nand_check_print(nand_check_report());
+#ifdef FTL_APPLE_COMPAT
+    /* Page through the Apple diagnostic lines (photographable) before the
+     * USB step, since the sector-0 USB read has been unreliable on the host
+     * (mass-storage enumerates but no disk object is created). */
+    show_apple_report(nand_check_report());
+#endif
     lcd_set_foreground(LCD_RBYELLOW);
     printf("Photo, then connect USB");
     printf("and run nandcheck.py");

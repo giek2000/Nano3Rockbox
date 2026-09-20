@@ -193,8 +193,18 @@ def collect(args):
     out = os.path.join(args.out, name + ".tar.gz")
     files = {"report.txt": text.encode()}
 
-    if rep.get("row", "none") == "none":
-        print("\nThe chip is not in Apple's table; only the report is saved.")
+    try:
+        geometry = {k: int(rep[k]) for k in ("banks", "blocks", "ppb", "pagesize")}
+        geometry_ok = (0 < geometry["banks"] <= 4
+                       and geometry["blocks"] > 0
+                       and 0 < geometry["ppb"] <= 128
+                       and geometry["pagesize"] >= SECTOR
+                       and geometry["pagesize"] % SECTOR == 0)
+    except (KeyError, TypeError, ValueError):
+        geometry_ok = False
+
+    if not geometry_ok:
+        print("\nThe report has no valid raw-NAND geometry; only the report is saved.")
     else:
         banks, blocks = int(rep["banks"]), int(rep["blocks"])
         ppb, pagesize = int(rep["ppb"]), int(rep["pagesize"])
