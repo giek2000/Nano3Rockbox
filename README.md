@@ -129,6 +129,9 @@ S5L8702 platform support, earlier community Nano 3G efforts, and the
 [freemyipod / wInd3x](https://github.com/freemyipod/wInd3x) project whose DFU
 exploit makes running unsigned bootloaders possible.
 
+Thanks also to **Andrew Rice** for reverse-engineering and documentation of the
+iPod Nano 3G platform that helped inform this port.
+
 **Not included in this repository:** Apple firmware images (`.ipsw`) and
 decrypted Apple binaries — those are Apple's copyrighted material and are not
 ours to redistribute.
