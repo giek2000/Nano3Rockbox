@@ -122,6 +122,9 @@ device.
 - [Building from source](port-docs/BUILDING.md) — for developers.
 - [Bring-up fixes](port-docs/BRINGUP_FIXES.md) — the defects fixed to make the
   port boot, for anyone doing similar S5L87xx work.
+- [Windows USB driver compatibility](port-docs/USB_DRIVER_COMPATIBILITY.md) —
+  why Rockbox Nano 3G uses its own USB product identity instead of Apple's
+  retail ID, and the confirmed Windows/iTunes-driver fix.
 
 ---
 

@@ -258,8 +258,22 @@
 //#define USB_ENABLE_SERIAL
 #define HAVE_USBSTACK
 #define HAVE_USB_HID_MOUSE
+/*
+ * Do not reuse Apple's retail Nano 3G product ID (05AC:1262) here.
+ *
+ * On Windows systems with iTunes installed, oem AppleIPod drivers bind to
+ * that exact VID/PID at the composite-device level. They then prevent the
+ * generic USBSTOR child from starting (Code 10), even though Rockbox presents
+ * a standards-compliant Bulk-Only/SCSI mass-storage interface. Rockbox needs
+ * a distinct product identity so Windows selects its generic USB stack.
+ *
+ * The vendor ID remains Apple because this is an Apple device; 127F is the
+ * private Rockbox Nano 3G transport product ID and is used by the temporary
+ * DFU-loaded image, the persistent bootloader, and the Rockbox firmware.
+ * Stock Apple firmware is untouched and continues to enumerate as 05AC:1262.
+ */
 #define USB_VENDOR_ID 0x05AC
-#define USB_PRODUCT_ID 0x1262
+#define USB_PRODUCT_ID 0x127F
 #define USB_DEVBSS_ATTR __attribute__((aligned(32)))
 #define HAVE_BOOTLOADER_USB_MODE
 #ifdef BOOTLOADER
