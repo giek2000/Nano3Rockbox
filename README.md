@@ -13,16 +13,17 @@ community port with a simple Windows app that installs it for you.
 
 ## Is my iPod supported?
 
-You need an **iPod Nano 3rd generation (8 GB)**. Not sure which iPod you have?
-It's the short, wide one with a 2-inch screen, from 2007.
+You need an **iPod Nano 3rd generation**. It shipped in **4 GB and 8 GB**
+capacities and both are supported. Not sure which iPod you have? It's the
+short, wide one with a 2-inch screen, from 2007.
 
 Not every Nano 3G can run this yet: it depends on the exact flash memory chip
-inside, which varies between units. The app has a **"Check my iPod (safe)"**
-button that reads the chip and tells you — it never writes anything, so it is
-safe to run on any unit.
+inside, which varies between units (capacity does not decide it). The app has a
+**"Check my iPod (safe)"** button that reads the chip and tells you — it never
+writes anything, so it is safe to run on any unit.
 
-Chips validated so far (Samsung, Hynix and Toshiba 8 GB units) are listed under
-[Devices used](NANO3G_TEST_UNITS.md).
+Chips validated so far (Samsung, Hynix and Toshiba units, across both 4 GB and
+8 GB) are listed under [Devices used](NANO3G_TEST_UNITS.md).
 
 ---
 
@@ -110,8 +111,6 @@ device.
 - [Building from source](port-docs/BUILDING.md) — for developers.
 - [Bring-up fixes](port-docs/BRINGUP_FIXES.md) — the defects fixed to make the
   port boot, for anyone doing similar S5L87xx work.
-- [Credits and sources](PROVENANCE.md) — the prior work this port builds on,
-  and a file-by-file accounting of what is new, adapted, or kept verbatim.
 
 ---
 
@@ -128,8 +127,7 @@ limitations and design tradeoffs are covered in
 This port stands on a large body of existing work — Rockbox itself and its
 S5L8702 platform support, earlier community Nano 3G efforts, and the
 [freemyipod / wInd3x](https://github.com/freemyipod/wInd3x) project whose DFU
-exploit makes running unsigned bootloaders possible. Full credits and a
-file-by-file provenance accounting are in [`PROVENANCE.md`](PROVENANCE.md).
+exploit makes running unsigned bootloaders possible.
 
 **Not included in this repository:** Apple firmware images (`.ipsw`) and
 decrypted Apple binaries — those are Apple's copyrighted material and are not
