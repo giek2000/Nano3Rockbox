@@ -73,6 +73,17 @@ unplug anything.
 
 ---
 
+## What it looks like
+
+The two main workflows in the app: installing Rockbox, and restoring the iPod
+back to Apple's software.
+
+![Install Rockbox screen — the app's main window during a Rockbox install, showing the step-by-step log](port-docs/images/SCRInstall.png)
+
+![Restore Apple screen — the app's window during an uninstall/restore, walking through returning the iPod to Apple's software](port-docs/images/SCRRestore.png)
+
+---
+
 ## Adding themes and fonts
 
 Once Rockbox is installed and the iPod boots it, you can use the official
