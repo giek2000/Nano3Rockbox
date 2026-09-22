@@ -70,8 +70,15 @@ if (Test-Path $zadig) { Copy-Item $zadig $payload }
 else { Write-Host "  WARNING: zadig.exe not found; driver-setup button will be inert" -ForegroundColor Yellow }
 
 # --- icon ------------------------------------------------------------------
-$icon = 'C:\KIRO\iPodUniversalDecrypt\icon.ico'
-if (Test-Path $icon) { Copy-Item $icon (Join-Path $here 'icon.ico') }
+# --- icon ------------------------------------------------------------------
+# The installer icon (icon.ico) is committed source in this directory, derived
+# from ROCKBOXNANO3.png (the green Nano 3G / Rockbox logo). Do NOT overwrite it
+# from an external folder here: an earlier version copied an unrelated icon
+# from iPodUniversalDecrypt, which shipped the wrong icon in the EXE. The spec
+# embeds this directory's icon.ico directly.
+if (-not (Test-Path (Join-Path $here 'icon.ico'))) {
+    Write-Host "  WARNING: icon.ico missing from installer dir; EXE will use a default icon" -ForegroundColor Yellow
+}
 
 # --- report ----------------------------------------------------------------
 $files = Get-ChildItem $payload -Recurse -File

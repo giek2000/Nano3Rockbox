@@ -109,7 +109,7 @@ _Static_assert(sizeof(struct apple_spare_meta) == 12, "meta spare header is 12 b
  */
 
 /* Device-info page signature. The 2G uses "DEVICEINFOSIGN"; hardware scan of
- * a stock 3G (Samsung MB253) showed the 3G devinfo page begins
+ * a stock 3G (Micronas [JEDEC 0xEC] MB253) showed the 3G devinfo page begins
  * "DEVICEINFOBBT" (bytes 44 45 56 49 43 45 49 4E 46 4F 42 42 54). We match on
  * the common "DEVICEINFO" prefix so both suffixes are accepted, then handle
  * the 3G's BBT layout below. Confirmed on hardware 2026-09-19. */
@@ -268,7 +268,7 @@ static bool a_mounted;
 
 /* Derive Apple geometry (planes/layout/userblocks/vflspares) from the chip
  * identity and physical geometry. Returns false if this chip's Apple layout
- * is not known. Currently covers the validated single-plane 4 KiB Samsung/
+ * is not known. Currently covers the validated single-plane 4 KiB Micronas/
  * Toshiba parts and the 2 KiB Hynix parts; others return false rather than
  * mount with a wrong map. Values match the historical chip table and the
  * ftltest presets in utils/ipodnano3g/ftltest/ftl_hooks.c. */

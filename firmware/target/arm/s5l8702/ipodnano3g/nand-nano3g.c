@@ -33,7 +33,7 @@
  *    through dedicated ECC-correction and "AUTOXFER" DMA-style
  *    registers, not a single command/address/FIFO-drain sequence. These
  *    exact register pokes are hardware facts about this specific
- *    controller (confirmed against a Samsung-chip unit; also present,
+ *    controller (confirmed against a Micronas [JEDEC 0xEC] chip unit; also present,
  *    for the same silicon, in an already hardware-tested implementation
  *    this project consulted once the generic-protocol assumption was
  *    shown to be wrong), kept verbatim below rather than re-derived, the
@@ -156,7 +156,7 @@
  * the resolved 20-byte-vs-12-byte gap this note used to describe as
  * still open). */
 
-/* Multi-unit (>2048-byte page, e.g. this Samsung MLC chip's 4096-byte
+/* Multi-unit (>2048-byte page, e.g. this Micronas MLC chip's 4096-byte
  * page) read sequence. This is a genuinely different, more heavily
  * pipelined register sequence from the single-unit chunked transfer
  * above -- not a loop over it -- confirmed against the reference
@@ -793,7 +793,7 @@ int nand_hw_read_id(unsigned int bank, uint8_t *id_out, unsigned int id_len)
  * chunked AUTOXFER sequence: 00h, a packed 5-cycle page address, 30h,
  * wait tR (READ STATUS ready-wait, not RBBDONE), then four
  * fmc_transfer_chunk_read() calls, one per 512-byte chunk of the page. */
-/* Multi-unit (page_size > 2048, e.g. this Samsung MLC chip's 4096-byte
+/* Multi-unit (page_size > 2048, e.g. this Micronas MLC chip's 4096-byte
  * page) read. Read-only counterpart to the single-unit path above -- see
  * fmc_read_multiunit_page()'s comment for why there is no corresponding
  * write path. bank/page-address/geometry/recognized checks are the
@@ -1171,6 +1171,16 @@ static uint32_t probe_bank_capacity_blocks(unsigned int bank,
 
 #ifdef NAND_CHECK
     last_probe_trace.stopped = false;
+    last_probe_trace.used_capacity_hint = false;
+
+    if (geo->diagnostic_capacity_hint && geo->blocks_per_bank != 0)
+    {
+        /* This exact ID has a read-only capacity hint from the diagnostic
+         * table. Do not run the known-unreliable aliasing probe; leave
+         * recognized false and let the report mark the hint unvalidated. */
+        last_probe_trace.used_capacity_hint = true;
+        return geo->blocks_per_bank;
+    }
 #endif
 
     /* Grow hi until a read at its first page fails outright. Capped so a
@@ -1183,7 +1193,7 @@ static uint32_t probe_bank_capacity_blocks(unsigned int bank,
      * chip's real end can alias back onto an in-range page and return a
      * perfectly normal success, not NAND_HWERR_TIMEOUT/NO_CHIP. Raising
      * this cap cannot fix that: it was raised from 16384 to 1048576
-     * against this Samsung MLC chip on real hardware, and every single
+     * against this Micronas MLC chip on real hardware, and every single
      * read still "succeeded" (probestop 0 both times), because the
      * requested addresses were aliasing rather than genuinely reaching
      * new storage. The cap here exists only to bound worst-case runtime
@@ -1192,7 +1202,7 @@ static uint32_t probe_bank_capacity_blocks(unsigned int bank,
      * any real chip's boundary given enough tries". Whether this
      * particular probe result should be trusted for a given chip is the
      * caller's job (see nand-check-nano3g.c's "probestop 0" handling and
-     * NANO3G_ORIGINAL_NAND_FTL.md's notes on this Samsung part's real,
+     * NANO3G_ORIGINAL_NAND_FTL.md's notes on this Micronas part's real,
      * ID-table-sourced 4096-block/bank capacity vs. the unreliable,
      * much larger number this probe reports for it). */
     while (hi < 16384)
@@ -1239,6 +1249,11 @@ unsigned int nand_check_probe_bank_capacity(unsigned int bank)
     geo = &banks_geometry[bank];
     if (geo->page_size == 0)
         return 0; /* never got a plausible geometry decode at all */
+    /* Exact diagnostic table hints take precedence over the generic
+     * read probe. Out-of-range NAND reads can alias or return otherwise
+     * non-diagnostic data, so they cannot establish a capacity boundary. */
+    if (geo->diagnostic_capacity_hint && geo->blocks_per_bank != 0)
+        return geo->blocks_per_bank;
 
     geo->blocks_per_bank = probe_bank_capacity_blocks(bank, geo);
     return geo->blocks_per_bank;
@@ -1285,6 +1300,7 @@ nand_check_write_test(unsigned int bank, uint32_t block)
     struct nand_geometry *geo;
     uint32_t page;
     unsigned int i;
+    uint8_t pattern_salt;
 
     memset(&last_write_test, 0, sizeof(last_write_test));
     last_write_test.erase_rc = NAND_HWERR_NO_CHIP;
@@ -1296,18 +1312,27 @@ nand_check_write_test(unsigned int bank, uint32_t block)
     geo = &banks_geometry[bank];
     if (geo->page_size == 0)
         return &last_write_test;
+    if (geo->blocks_per_bank == 0 || block >= geo->blocks_per_bank)
+    {
+        last_write_test.erase_rc = NAND_HWERR_OUT_OF_RANGE;
+        last_write_test.write_rc = NAND_HWERR_OUT_OF_RANGE;
+        last_write_test.read_rc = NAND_HWERR_OUT_OF_RANGE;
+        return &last_write_test;
+    }
 
     page = block * geo->pages_per_block;
+    pattern_salt = (uint8_t)(block ^ (block >> 8) ^ (block >> 16)
+                             ^ (bank * 0x5bu));
+    last_write_test.pattern_salt = pattern_salt;
 
-    /* A simple, position-dependent pattern: not all-0xFF/all-0x00 (which
-     * an addressing bug -- reading a different, blank or stale page --
-     * could pass by accident), and byte-position-dependent enough that a
-     * shifted/misaligned transfer would also be caught. */
+    /* Include bank/block identity in both patterns. Earlier builds used the
+     * same pattern for every sweep block, so a locator could mistake a
+     * previously successful write for the failed write's landing address. */
     for (i = 0; i < geo->page_size; i++)
-        pattern[i] = (uint8_t)(i * 37 + 11);
+        pattern[i] = (uint8_t)(i * 37 + 11) ^ pattern_salt;
     memset(meta_in, 0, sizeof(meta_in));
     for (i = 0; i < NAND_SPARE_META_BYTES && i < geo->spare_size; i++)
-        meta_in[i] = (uint8_t)(0xA5 ^ i);
+        meta_in[i] = (uint8_t)(0xA5 ^ i ^ pattern_salt);
 
     /* nand_hw_write_page()/nand_hw_erase_block() both correctly refuse
      * any bank whose ->recognized is false -- that gate is what keeps
@@ -1349,6 +1374,49 @@ nand_check_write_test(unsigned int bank, uint32_t block)
                 NAND_SPARE_META_BYTES < geo->spare_size
                     ? NAND_SPARE_META_BYTES : geo->spare_size) == 0);
 
+    if (!last_write_test.data_match || !last_write_test.meta_match)
+    {
+        uint32_t candidates[8];
+        unsigned int count = 0, ci;
+
+#define ADD_LOCATOR_BLOCK(v) do { \
+        uint32_t candidate = (v); \
+        bool duplicate = false; \
+        unsigned int j; \
+        if (candidate < geo->blocks_per_bank) { \
+            for (j = 0; j < count; j++) \
+                if (candidates[j] == candidate) duplicate = true; \
+            if (!duplicate && count < ARRAYLEN(candidates)) \
+                candidates[count++] = candidate; \
+        } \
+    } while (0)
+        ADD_LOCATOR_BLOCK(0);
+        ADD_LOCATOR_BLOCK(block / 2);
+        ADD_LOCATOR_BLOCK(block % 4096);
+        ADD_LOCATOR_BLOCK(block % 8192);
+        ADD_LOCATOR_BLOCK(block);
+        if (block > 0) ADD_LOCATOR_BLOCK(block - 1);
+        ADD_LOCATOR_BLOCK(block + 1);
+#undef ADD_LOCATOR_BLOCK
+
+        for (ci = 0; ci < count; ci++)
+        {
+            int locator_rc = nand_hw_read_page(bank,
+                candidates[ci] * geo->pages_per_block, readback, meta_out);
+            last_write_test.locator_blocks[ci] = candidates[ci];
+            if (locator_rc >= 0)
+            {
+                last_write_test.locator_data_match[ci] =
+                    memcmp(pattern, readback, geo->page_size) == 0;
+                last_write_test.locator_meta_match[ci] =
+                    memcmp(meta_in, meta_out,
+                           NAND_SPARE_META_BYTES < geo->spare_size
+                               ? NAND_SPARE_META_BYTES : geo->spare_size) == 0;
+            }
+        }
+        last_write_test.locator_count = count;
+    }
+
     return &last_write_test;
 }
 
@@ -1369,24 +1437,106 @@ nand_check_write_test(unsigned int bank, uint32_t block)
  * blocks once something has already gone wrong. */
 static struct nand_write_sweep_result last_sweep;
 
+static void nand_check_preflight_block(struct nand_write_preflight *out,
+                                       unsigned int bank, uint32_t block)
+{
+    static uint8_t spare0[NAND_MAX_SPARE_SIZE] NAND_DMA_BUF_ATTR;
+    static uint8_t spare1[NAND_MAX_SPARE_SIZE] NAND_DMA_BUF_ATTR;
+    const struct nand_geometry *geo = &banks_geometry[bank];
+    uint32_t page = block * geo->pages_per_block;
+
+    memset(out, 0, sizeof(*out));
+    memset(spare0, 0, sizeof(spare0));
+    memset(spare1, 0, sizeof(spare1));
+    out->bank = bank;
+    out->block = block;
+    out->first_page_rc = nand_hw_read_page(bank, page, NULL, spare0);
+    out->second_page_rc = nand_hw_read_page(bank, page + 1, NULL, spare1);
+    out->first_meta_prefix[0] = spare0[0];
+    out->first_meta_prefix[1] = spare0[1];
+    out->second_meta_prefix[0] = spare1[0];
+    out->second_meta_prefix[1] = spare1[1];
+}
+
+/* Read one already-written isolation block and identify which CE's unique
+ * salted pattern is visible through read_bank. No writes occur here. */
+static int nand_check_pattern_source(unsigned int read_bank, uint32_t block,
+                                     unsigned int bank_mask)
+{
+    static uint8_t expected[NAND_MAX_PAGE_SIZE] NAND_DMA_BUF_ATTR;
+    static uint8_t actual[NAND_MAX_PAGE_SIZE] NAND_DMA_BUF_ATTR;
+    static uint8_t expected_meta[NAND_MAX_SPARE_SIZE] NAND_DMA_BUF_ATTR;
+    static uint8_t actual_meta[NAND_MAX_SPARE_SIZE] NAND_DMA_BUF_ATTR;
+    const struct nand_geometry *geo = &banks_geometry[read_bank];
+    unsigned int source, i;
+    int rc;
+
+    rc = nand_hw_read_page(read_bank, block * geo->pages_per_block,
+                           actual, actual_meta);
+    if (rc < 0)
+        return -1;
+
+    for (source = 0; source < NAND_MAX_BANKS; source++)
+    {
+        uint8_t salt;
+        if (!(bank_mask & (1u << source)))
+            continue;
+        salt = (uint8_t)(block ^ (block >> 8) ^ (block >> 16)
+                         ^ (source * 0x5bu));
+        for (i = 0; i < geo->page_size; i++)
+            expected[i] = (uint8_t)(i * 37 + 11) ^ salt;
+        memset(expected_meta, 0, sizeof(expected_meta));
+        for (i = 0; i < NAND_SPARE_META_BYTES && i < geo->spare_size; i++)
+            expected_meta[i] = (uint8_t)(0xA5 ^ i ^ salt);
+        if (memcmp(expected, actual, geo->page_size) == 0
+            && memcmp(expected_meta, actual_meta,
+                      NAND_SPARE_META_BYTES < geo->spare_size
+                          ? NAND_SPARE_META_BYTES : geo->spare_size) == 0)
+            return (int)source;
+    }
+    return -1;
+}
+
 const struct nand_write_sweep_result *nand_check_write_test_sweep(void)
 {
-    static const uint32_t test_blocks[] = { 16, 1024, 2048, 4000 };
     unsigned int bank;
+    unsigned int bank_mask = nand_check_physical_bank_mask();
 
     memset(&last_sweep, 0, sizeof(last_sweep));
+    last_sweep.bank_mask = bank_mask;
+    for (bank = 0; bank < NAND_MAX_BANKS; bank++)
+        last_sweep.isolation_source[bank] = -1;
 
     for (bank = 0; bank < NAND_MAX_BANKS; bank++)
     {
         unsigned int bi;
+        uint32_t blocks;
 
-        if (banks_geometry[bank].page_size == 0)
-            continue; /* this bank's geometry was never decoded at all */
+        if (!(bank_mask & (1u << bank)) || banks_geometry[bank].page_size == 0)
+            continue;
+        blocks = banks_geometry[bank].blocks_per_bank;
+        if (blocks <= 32)
+            continue;
 
-        for (bi = 0; bi < ARRAYLEN(test_blocks); bi++)
+        /* Sample one low block and the three blocks around the midpoint.
+         * For A5D5D589 this is an in-range plane/layout transition check
+         * (4095..4097 of 0..8191), not a capacity-boundary test. Never use
+         * this sweep to probe block == blocks_per_bank. */
+        last_sweep.test_blocks[0] = 16;
+        last_sweep.test_blocks[1] = blocks / 2 - 1;
+        last_sweep.test_blocks[2] = blocks / 2;
+        last_sweep.test_blocks[3] = blocks / 2 + 1;
+        last_sweep.block_count = 4;
+
+        for (bi = 0; bi < last_sweep.block_count; bi++)
         {
-            const struct nand_write_test_result *r =
-                nand_check_write_test(bank, test_blocks[bi]);
+            const struct nand_write_test_result *r;
+
+            if (last_sweep.preflight_count < NAND_WRITE_PREFLIGHT_MAX)
+                nand_check_preflight_block(
+                    &last_sweep.preflight[last_sweep.preflight_count++],
+                    bank, last_sweep.test_blocks[bi]);
+            r = nand_check_write_test(bank, last_sweep.test_blocks[bi]);
             bool ok = (r->erase_rc == 0 && r->write_rc == 0
                      && r->read_rc >= 0 && r->data_match && r->meta_match);
 
@@ -1398,10 +1548,26 @@ const struct nand_write_sweep_result *nand_check_write_test_sweep(void)
             }
 
             last_sweep.fail_bank = bank;
-            last_sweep.fail_block = test_blocks[bi];
+            last_sweep.fail_block = last_sweep.test_blocks[bi];
             last_sweep.fail_result = *r;
             return &last_sweep;
         }
+    }
+
+    /* Block 16 was written with a different salt through every CE. Re-read
+     * it after all writes to determine whether each CE retained its own
+     * pattern or exposes another CE's physical die. */
+    for (bank = 0; bank < NAND_MAX_BANKS; bank++)
+    {
+        int source;
+        if (!(bank_mask & (1u << bank)))
+            continue;
+        last_sweep.isolation_tested_mask |= 1u << bank;
+        source = nand_check_pattern_source(bank, last_sweep.test_blocks[0],
+                                           bank_mask);
+        last_sweep.isolation_source[bank] = source;
+        if (source == (int)bank)
+            last_sweep.isolation_preserved_mask |= 1u << bank;
     }
 
     return &last_sweep;
@@ -1457,6 +1623,26 @@ unsigned int nand_scan_banks(void)
                 probe_bank_capacity_blocks(bank, &banks_geometry[bank]);
 
         detected_bank_count = bank + 1;
+    }
+
+    /* Topology guard. A validated-chip row can carry expected_banks: the
+     * chip-enable count the part was actually hardware-validated in. The
+     * per-bank decode cannot check it (it sees one bank at a time), so it is
+     * enforced here now that the true count is known. If any recognised bank
+     * expected a specific count that the scan did not produce, withdraw
+     * recognition across all banks so the FTL mounts read-only rather than
+     * trusting an untested same-ext-ID variant in a different topology (e.g.
+     * an 8GB/4-CE Intel A5D5D589 matching the 4GB/2-CE validated row). */
+    for (bank = 0; bank < detected_bank_count; bank++)
+    {
+        unsigned int want = banks_geometry[bank].expected_banks;
+        if (want != 0 && want != detected_bank_count)
+        {
+            unsigned int b;
+            for (b = 0; b < detected_bank_count; b++)
+                banks_geometry[b].recognized = false;
+            break;
+        }
     }
 
     return detected_bank_count;

@@ -124,6 +124,19 @@ struct nand_geometry
     bool         recognized;    /* false: decoded speculatively, treat with
                                     extra caution (still readable, but the
                                     FTL layer will refuse to mount r/w) */
+    bool         diagnostic_capacity_hint; /* true: blocks_per_bank is a
+                                               read-only research hint, not
+                                               write validation */
+    unsigned int expected_banks; /* if nonzero, the validated-chip row for
+                                    this part was hardware-tested only in a
+                                    package with exactly this many chip
+                                    enables; nand_scan_banks() withdraws
+                                    ->recognized if the actual bank count
+                                    differs, so an untested same-ext-ID
+                                    variant with a different die/CE topology
+                                    (e.g. Intel A5D5D589 4GB/2-CE validated
+                                    vs 8GB/4-CE untested) is not silently
+                                    mounted writable. 0 = no constraint. */
 };
 
 /* --- Low level bank/chip operations --------------------------------- */
@@ -163,12 +176,8 @@ enum nand_hw_error
     NAND_HWERR_ERASE_FAILED   = -2,  /* chip status reports erase failure */
     NAND_HWERR_PROGRAM_FAILED = -3,  /* chip status reports program failure */
     NAND_HWERR_NO_CHIP        = -4,  /* bank has no chip enable asserted */
-    /* This pass of the driver only ported the controller's single
-     * 2048-byte-unit chunked transfer sequence (see nand-nano3g.c); a
-     * chip whose decoded page_size isn't 2048 hits this rather than
-     * being driven incorrectly. Multi-unit (4KiB-page) support is a
-     * known, documented follow-up, not an oversight. */
     NAND_HWERR_UNSUPPORTED_GEOMETRY = -5,
+    NAND_HWERR_OUT_OF_RANGE   = -6,  /* requested test block >= capacity */
 };
 
 /* --- Bank discovery --------------------------------------------------- */
@@ -281,9 +290,28 @@ struct nand_write_test_result
                            failure) */
     bool data_match;   /* written pattern read back byte-for-byte equal */
     bool meta_match;    /* the 12 real spare-metadata bytes round-tripped */
+    uint8_t pattern_salt; /* derived from bank/block; distinguishes sweep writes */
+    unsigned int locator_count; /* read-only follow-up after mismatch */
+    uint32_t locator_blocks[8];
+    bool locator_data_match[8];
+    bool locator_meta_match[8];
 };
 const struct nand_write_test_result *
 nand_check_write_test(unsigned int bank, uint32_t block);
+
+/* This controller exposes twelve decoded metadata bytes, not full raw OOB.
+ * The preflight records two page-read ECC results and a small metadata prefix
+ * before a planned destructive block is touched. */
+#define NAND_WRITE_PREFLIGHT_MAX (NAND_MAX_BANKS * 4)
+struct nand_write_preflight
+{
+    unsigned int bank;
+    uint32_t block;
+    int first_page_rc;
+    int second_page_rc;
+    uint8_t first_meta_prefix[2];
+    uint8_t second_meta_prefix[2];
+};
 
 /* Runs nand_check_write_test() across a small, bounded set of (bank,
  * block) pairs rather than just one, for broader (still not exhaustive)
@@ -293,16 +321,26 @@ nand_check_write_test(unsigned int bank, uint32_t block);
  * the actual pairs tried. */
 struct nand_write_sweep_result
 {
-    unsigned int attempted;   /* how many (bank, block) pairs were tried */
-    unsigned int passed;      /* erase==0 && write==0 && read>=0 &&
-                                  data_match && meta_match, for all of
-                                  the above */
+    unsigned int attempted;
+    unsigned int passed;
+    unsigned int bank_mask;       /* one representative CE per physical die */
+    unsigned int block_count;
+    uint32_t test_blocks[4];
+    unsigned int isolation_tested_mask;
+    unsigned int isolation_preserved_mask;
+    int isolation_source[NAND_MAX_BANKS]; /* pattern owner seen through each CE */
+    unsigned int preflight_count;
+    struct nand_write_preflight preflight[NAND_WRITE_PREFLIGHT_MAX];
     /* First failing pair's details, valid only if passed < attempted */
     unsigned int fail_bank;
     uint32_t     fail_block;
     struct nand_write_test_result fail_result;
 };
 const struct nand_write_sweep_result *nand_check_write_test_sweep(void);
+/* Present, stable chip-enable mask. Read-only page equality is deliberately
+ * not used to collapse it because independent dies can contain replicated
+ * factory data. Destructive isolation checks determine physical aliasing. */
+unsigned int nand_check_physical_bank_mask(void);
 
 /* Diagnostic trace of the last capacity probe's doubling-phase stopping
  * point (see nand-nano3g.c:probe_bank_capacity_blocks()): which block/
@@ -316,6 +354,7 @@ const struct nand_write_sweep_result *nand_check_write_test_sweep(void);
 struct nand_probe_trace
 {
     bool     stopped;
+    bool     used_capacity_hint;
     uint32_t stop_block;
     uint32_t stop_page;
     int      stop_rc;

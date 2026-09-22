@@ -117,9 +117,9 @@ static void test_vendor_decode_public_ids(void)
     CHECK(geo.recognized, "Toshiba-style ID should be recognized");
     CHECK(strcmp(geo.maker_name, "Toshiba") == 0, "maker name (toshiba)");
 
-    id[0] = NAND_MAKER_SAMSUNG; id[1] = 0xDC;
+    id[0] = NAND_MAKER_MICRONAS; id[1] = 0xDC;
     nand_vendor_decode(id, 4, &geo);
-    CHECK(geo.recognized, "Samsung-style ID should be recognized");
+    CHECK(geo.recognized, "Micronas-style ID should be recognized");
 
     id[0] = NAND_MAKER_MICRON; id[1] = 0xDC;
     nand_vendor_decode(id, 4, &geo);
@@ -536,8 +536,8 @@ static void test_uncorrectable_ecc_is_not_trusted(void)
 }
 
 /* Validates the validated-chip table override added alongside real
- * hardware testing of a Samsung MLC chip found in an actual 8GB Nano 3G
- * unit (see NANO3G_ORIGINAL_NAND_FTL.md). The exact ID bytes here
+ * hardware testing of a Micronas (JEDEC 0xEC) MLC chip found in an actual
+ * 8GB Nano 3G unit (see NANO3G_ORIGINAL_NAND_FTL.md). The exact ID bytes here
  * (0xEC/0xD5/0xB6) match that table row precisely -- if this test ever
  * needs updating because the row's bytes changed, whoever changes the
  * table should update this to match, not the other way around. */
@@ -551,7 +551,7 @@ static void test_validated_mlc_chip_override(void)
      * rather than 0 (which is what the generic decode alone would leave
      * an MLC part's blocks_per_bank as, since it never counts as
      * recognized on its own). */
-    id[0] = NAND_MAKER_SAMSUNG; id[1] = 0xD5; id[2] = 0x14; id[3] = 0xB6;
+    id[0] = NAND_MAKER_MICRONAS; id[1] = 0xD5; id[2] = 0x14; id[3] = 0xB6;
     nand_vendor_decode(id, 4, &geo);
     CHECK(geo.recognized,
           "exact validated-chip match must override ->recognized to true "
@@ -565,7 +565,7 @@ static void test_validated_mlc_chip_override(void)
     /* Same maker/device, but a DIFFERENT ext-id byte (i.e. a same-family
      * part this project has NOT specifically tested) must NOT match --
      * the override is an exact-triple lookup, not "close enough". */
-    id[0] = NAND_MAKER_SAMSUNG; id[1] = 0xD5; id[2] = 0x14; id[3] = 0xB7;
+    id[0] = NAND_MAKER_MICRONAS; id[1] = 0xD5; id[2] = 0x14; id[3] = 0xB7;
     nand_vendor_decode(id, 4, &geo);
     CHECK(!geo.recognized,
           "a same-maker/device but different ext-id byte must NOT match "
@@ -574,7 +574,7 @@ static void test_validated_mlc_chip_override(void)
     /* Second validated row: the Hynix 4-die MLC part from the 8GB unit
      * (model MB261), hardware write/read/verify-tested across all four
      * banks this session (raw READ ID AD D5 55 A5 ...; ext-id byte 0xA5
-     * decodes to page_size=2048, spare_size=64). Like the Samsung row,
+     * decodes to page_size=2048, spare_size=64). Like the Micronas row,
      * these exact bytes (0xAD/0xD5/0xA5) must match the table entry in
      * nand_vendor.c -- if that row's bytes change, update this to match. */
     id[0] = NAND_MAKER_HYNIX; id[1] = 0xD5; id[2] = 0x14; id[3] = 0xA5;
@@ -629,7 +629,7 @@ static void test_validated_mlc_chip_override(void)
      * (model MB263), hardware write/read/verify-tested across all four
      * banks this session (raw READ ID 98 D5 94 BA ...; ext-id byte 0xBA
      * decodes to page_size=4096, spare_size=64 -- same geometry as the
-     * Samsung part). These exact bytes (0x98/0xD5/0xBA) must match the
+     * Micronas part). These exact bytes (0x98/0xD5/0xBA) must match the
      * table entry in nand_vendor.c. */
     id[0] = NAND_MAKER_TOSHIBA; id[1] = 0xD5; id[2] = 0x14; id[3] = 0xBA;
     nand_vendor_decode(id, 4, &geo);
@@ -981,7 +981,7 @@ static void test_v2_seq_comparator(void)
 /* v2 full-scale Hynix geometry mount. Regression guard for the FTL_ERR_TOO_SMALL
  * (-103) failure that the 4096-block static bound produced on the real Hynix
  * 8GB unit: that part is 4 banks x 8192 blocks/bank x 128 pages of 2048-byte
- * pages (twice the block count of the 4KB-page Samsung part, same 2GiB/die).
+ * pages (twice the block count of the 4KB-page Micronas part, same 2GiB/die).
  * Before FTL_MAX_BLOCKS_PER_BANK was raised to 8192 this geometry was rejected
  * at mount; this test configures exactly that geometry and requires the mount
  * to succeed and a write/remount/read round-trip to hold, so the bound can
@@ -1022,7 +1022,7 @@ static void test_v2_hynix_scale_geometry_mounts(void)
           "v2 must MOUNT the full 8192-block Hynix geometry (regression guard "
           "for the -103 / FTL_ERR_TOO_SMALL rejection at the old 4096 bound)");
 
-    /* The logical capacity must be non-trivial (twice the Samsung block count
+    /* The logical capacity must be non-trivial (twice the Micronas block count
      * backs roughly twice as many logical pages for the same byte capacity). */
     uint32_t sectors = ftl_num_sectors();
     CHECK(sectors > 3000000u,

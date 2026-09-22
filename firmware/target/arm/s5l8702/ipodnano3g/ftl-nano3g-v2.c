@@ -97,15 +97,15 @@
  *
  * Two real 8GB-unit geometries are supported, and the bound must cover the
  * larger block count of the two because one universal binary must mount either:
- *   - Samsung 4-die MLC: 4096 blocks/bank of 128 pages, 4096-byte pages
+ *   - Micronas 4-die MLC: 4096 blocks/bank of 128 pages, 4096-byte pages
  *     (512KiB erase block), 2 GiB/die.
- *   - Hynix   4-die MLC: 8192 blocks/bank of 128 pages, 2048-byte pages
+ *   - Hynix    4-die MLC: 8192 blocks/bank of 128 pages, 2048-byte pages
  *     (256KiB erase block), 2 GiB/die.
  * Both dies are the same 2 GiB, but the Hynix part's smaller physical page
  * carves the die into twice as many blocks and twice as many physical pages.
  * Because this FTL maps at physical-page granularity, the Hynix part needs
- * twice the map/bookkeeping entries of the Samsung part for the same bytes --
- * so the static bound is the Hynix block count (8192), not the Samsung one.
+ * twice the map/bookkeeping entries of the Micronas part for the same bytes --
+ * so the static bound is the Hynix block count (8192), not the Micronas one.
  *
  * ftl_init() still refuses to mount (FTL_ERR_TOO_SMALL) any geometry that
  * would exceed these bounds, so an unexpected even-larger chip fails loudly

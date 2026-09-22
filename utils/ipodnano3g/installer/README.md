@@ -53,7 +53,7 @@ cannot read, which wipes the Rockbox install. Treat this as a single-boot
 device.
 
 The installer restricts target disks to the exact Rockbox FTL inquiry names
-`Apple Samsung`, `Apple Hynix`, and `Apple Toshiba`, requires USB transport,
+`Apple Micronas`, `Apple Hynix`, `Apple Toshiba`, and `Apple Intel`, requires USB transport,
 and enforces a 1–20 GB safety range. It never accepts Apple's `Apple iPod`
 disk name.
 

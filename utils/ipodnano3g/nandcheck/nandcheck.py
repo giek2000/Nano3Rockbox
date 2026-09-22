@@ -187,6 +187,9 @@ def collect(args):
     print("reading %s" % path)
     disk = Disk(path)
     text, rep = parse_report(disk.read(0, 1))
+    payload_mode = rep.get("payload_mode", "read-only")
+    if payload_mode != "read-only":
+        sys.exit("refusing non-read-only NAND payload mode %r; use the separately gated collector application" % payload_mode)
     print(text.rstrip())
     ident = rep.get("ids", "unknown").split()[0]
     name = "nandcheck-%s-x%s" % (ident, rep.get("banks", "0"))

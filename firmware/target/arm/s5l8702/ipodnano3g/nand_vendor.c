@@ -27,14 +27,14 @@ const char *nand_vendor_name(uint8_t maker_id)
 {
     switch (maker_id)
     {
-        case NAND_MAKER_TOSHIBA: return "Toshiba";
-        case NAND_MAKER_SAMSUNG: return "Samsung";
-        case NAND_MAKER_HYNIX:   return "Hynix";
-        case NAND_MAKER_INTEL:   return "Intel";
-        case NAND_MAKER_MICRON:  return "Micron";
-        case NAND_MAKER_SANDISK: return "SanDisk";
-        case NAND_MAKER_STMICRO: return "ST Micro";
-        default:                 return "Unknown";
+        case NAND_MAKER_TOSHIBA:  return "Toshiba";
+        case NAND_MAKER_MICRONAS: return "Micronas";
+        case NAND_MAKER_HYNIX:    return "Hynix";
+        case NAND_MAKER_INTEL:    return "Intel";
+        case NAND_MAKER_MICRON:   return "Micron";
+        case NAND_MAKER_SANDISK:  return "SanDisk";
+        case NAND_MAKER_STMICRO:  return "ST Micro";
+        default:                  return "Unknown";
     }
 }
 
@@ -135,8 +135,8 @@ static bool decode_legacy_id(uint8_t device_id, struct nand_geometry *geo)
  * part stays ->recognized == false and read-only, however plausible
  * its generic geometry decode looks.
  *
- * blocks_per_bank for the Samsung row below (4096) comes from Samsung's
- * own public device-ID numbering (device ID 0xD5 = 2GiB/16Gigabit,
+ * blocks_per_bank for the Micronas row below (4096) comes from the
+ * public device-ID numbering (device ID 0xD5 = 2GiB/16Gigabit,
  * the same convention independently reproduced in, among others, the
  * Linux kernel's nand_ids.c) divided by this chip's own measured
  * pages_per_block (128) * page_size (4096) = 512KiB/block -- not from
@@ -148,18 +148,35 @@ struct nand_validated_chip
     uint8_t ext_id_byte;      /* READ ID byte 3, as decoded by
                                   decode_large_page_ext_id() above */
     unsigned int blocks_per_bank;
+    unsigned int expected_banks; /* chip-enable count this row was hardware-
+                                    validated in; 0 = no constraint. Guards
+                                    against a same-ext-ID part in a different,
+                                    untested topology matching this row -- see
+                                    struct nand_geometry.expected_banks. Makers
+                                    whose 4GB/8GB variants share an ext-id and
+                                    the same per-die geometry (only the die
+                                    count differs) use 0; Intel A5D5D589 uses 2
+                                    because its 8GB variant is a different,
+                                    untested 4-CE topology. */
     const char *note;         /* for logging/diagnostics only */
 };
 
 static const struct nand_validated_chip nano3g_validated_chips[] =
 {
-    /* Samsung, 4-die 2GiB MLC package (8GB Nano 3G unit), device ID
-     * 0xD5, ext ID byte 0xB6 (page_size=4096, spare_size=128,
-     * pages_per_block=128, x8) -- erased, written, read back and
-     * verified across all 4 banks / multiple blocks per bank on real
-     * hardware this session (see NANO3G_ORIGINAL_NAND_FTL.md's
-     * "First real write/erase test" and its broader sweep). */
-    { NAND_MAKER_SAMSUNG, 0xD5, 0xB6, 4096, "Samsung 4x2GiB MLC (8GB unit)" },
+    /* Micronas (JEDEC 0xEC; historically mislabelled "Samsung" -- Samsung's
+     * real JEDEC ID is 0xCE), 2GiB/die MLC, device ID 0xD5, ext ID byte 0xB6
+     * (raw READ ID: EC D5 14 B6 74 EC D5 14; page_size=4096, spare_size=128,
+     * pages_per_block=128, x8) -- erased, written, read back and verified on
+     * real hardware. This one row covers both populated-die counts of the same
+     * die (expected_banks=0, so any present-CE count is accepted):
+     *   - 4-die 4-CE 8GB unit (model MB253): all 4 banks / multiple blocks per
+     *     bank (see NANO3G_ORIGINAL_NAND_FTL.md's "First real write/erase test"
+     *     and its broader sweep).
+     *   - 2-die 2-CE 4GB unit (model MB245): both present CEs, wsweep 8/8,
+     *     wisolate 3/3, wstatus passed (collector v5.4.4, 2026-09-22).
+     * Both are per-part validations on identical silicon, not a claim that
+     * Micronas MLC in general is trusted. */
+    { NAND_MAKER_MICRONAS, 0xD5, 0xB6, 4096, 0, "Micronas 2GiB/die MLC (4GB 2-CE / 8GB 4-CE)" },
 
     /* Hynix, 4-die MLC package (4GB Nano 3G unit, model MA978), device ID
      * 0xD3, ext ID byte 0xA5 (raw READ ID: AD D3 14 A5 64 AD D3 14;
@@ -178,7 +195,7 @@ static const struct nand_validated_chip nano3g_validated_chips[] =
      * a 2048-byte-page part in a 4GB unit, i.e. four 1GiB dies; 1GiB /
      * (2048-byte page * 128 pages/block) = 256KiB/block -> 4096
      * blocks/bank, not the unreliable probe's 16384. */
-    { NAND_MAKER_HYNIX, 0xD3, 0xA5, 4096, "Hynix 4x1GiB MLC (4GB unit)" },
+    { NAND_MAKER_HYNIX, 0xD3, 0xA5, 4096, 0, "Hynix 4x1GiB MLC (4GB unit)" },
 
     /* Hynix, 4-die MLC package (8GB Nano 3G unit, model MB261), device ID
      * 0xD5, ext ID byte 0xA5 (raw READ ID: AD D5 55 A5 ...; the generic
@@ -197,12 +214,12 @@ static const struct nand_validated_chip nano3g_validated_chips[] =
      * on MLC). This row is that per-part validation, not a claim that
      * Hynix MLC in general is trusted. blocks_per_bank is the die's total
      * (8192), from which ftl_init() takes its own spare pool. */
-    { NAND_MAKER_HYNIX, 0xD5, 0xA5, 8192, "Hynix 4-die MLC (8GB unit)" },
+    { NAND_MAKER_HYNIX, 0xD5, 0xA5, 8192, 0, "Hynix 4-die MLC (8GB unit)" },
 
     /* Toshiba, 4-die MLC package (8GB Nano 3G unit, model MB263), device ID
      * 0xD5, ext ID byte 0xBA (raw READ ID: 98 D5 94 BA ...; the generic
      * large-page decode gives page_size=4096, spare_size=64,
-     * pages_per_block=128, x8 -- same geometry as the Samsung part, but
+     * pages_per_block=128, x8 -- same geometry as the Micronas part, but
      * left ->recognized false by the generic decode because it is MLC, and
      * the runtime capacity probe is unreliable for it, reporting 16384
      * blocks with blocks_unreliable=1).
@@ -216,10 +233,93 @@ static const struct nand_validated_chip nano3g_validated_chips[] =
      * Toshiba MLC in general is trusted. blocks_per_bank is 4096: this is
      * a 4096-byte-page part on a 2 GiB die (device ID 0xD5 = 16Gbit), so
      * 2GiB / (4096-byte page * 128 pages/block) = 512KiB/block -> 4096
-     * blocks/bank, the same figure and reasoning as the Samsung row above,
+     * blocks/bank, the same figure and reasoning as the Micronas row above,
      * not the unreliable probe's 16384. */
-    { NAND_MAKER_TOSHIBA, 0xD5, 0xBA, 4096, "Toshiba 4-die MLC (8GB unit)" },
+    { NAND_MAKER_TOSHIBA, 0xD5, 0xBA, 4096, 0, "Toshiba 4-die MLC (8GB unit)" },
+
+    /* Intel, 2-die MLC package (4GB Nano 3G unit, model MA978), device ID
+     * 0xD5, ext ID byte 0xA5 (raw READ ID: 89 D5 D5 A5 68 ...; part
+     * Intel JS29F32G08FAMB2. The generic large-page decode gives
+     * page_size=2048, spare_size=64, pages_per_block=128, x8 -- but
+     * leaves ->recognized false because it is MLC, and the runtime
+     * capacity probe is unreliable for it, reporting 16384 blocks with
+     * blocks_unreliable=1). Current upstream Rockbox's chip table and the
+     * exact-part controller database both give this part 8192 blocks per
+     * chip enable.
+     *
+     * Erased, written, read back and verified byte-for-byte (data AND
+     * spare metadata) across both present chip enables and multiple
+     * blocks per CE on real hardware, via the -DNAND_CHECK write test +
+     * sweep: "wtest erase 0 write 0 read 2 / data 1 meta 1", "wsweep
+     * 8/8 passed", "wisolate 3/3", "wstatus passed" (read 2 = a benign
+     * correctable-ECC result, expected on MLC; 8/8 rather than 16/16
+     * because this is a 2-CE part, not 4). This row is that per-part
+     * validation, not a claim that Intel MLC in general is trusted, and
+     * the bank-count match keeps it off the 4-CE 8GB Intel variant that
+     * shares these three ID bytes. blocks_per_bank is the die's total
+     * (8192): 2048-byte page * 128 pages/block * 8192 = 2 GiB/die, x2
+     * CE = 4 GiB. */
+    { NAND_MAKER_INTEL, 0xD5, 0xA5, 8192, 2, "Intel 2-die MLC (4GB unit)" },
 };
+
+/* Diagnostic-only geometry hints for exact parts that have been identified
+ * but have not yet passed the project's erase/program/read-back validation.
+ * These entries deliberately do NOT set ->recognized and therefore cannot
+ * make the normal FTL/flasher writable. They only provide a conservative
+ * capacity hint to NAND_CHECK diagnostics; the hint remains marked
+ * unvalidated in the report until hardware testing establishes it.
+ *
+ * The Intel part below is from model MA978, with stable ID bytes
+ * 89 D5 D5 A5 68 00 00 00 on two chip enables. Current upstream
+ * Rockbox, the exact-part controller database, and the 4 GiB package
+ * arithmetic all agree on 8192 blocks per chip enable: 2048 bytes/page *
+ * 128 pages/block * 8192 blocks = 2 GiB/CE, and two CEs = 4 GiB.
+ * This remains a read-only geometry hint; it does not validate writes,
+ * Apple VFL/remap handling, or the exact part's bad-block policy. */
+struct nand_diagnostic_chip
+{
+    uint8_t id[8];
+    unsigned int blocks_per_bank;
+    const char *note;
+};
+
+static const struct nand_diagnostic_chip nano3g_diagnostic_chips[] =
+{
+    /* Empty: the Intel JS29F32G08FAMB2 (89 D5 D5 A5 68, MA978 4GB) that
+     * previously lived here as a read-only hint has been promoted to the
+     * validated table above after passing the on-hardware write test and
+     * sweep. New unverified exact parts can be listed here as read-only
+     * diagnostic hints until they pass the same test. */
+    { { 0, 0, 0, 0, 0, 0, 0, 0 }, 0, NULL },
+};
+
+static const struct nand_diagnostic_chip *
+find_diagnostic_chip(const uint8_t *id_bytes, unsigned int id_len)
+{
+    unsigned int i;
+    unsigned int count = sizeof(nano3g_diagnostic_chips)
+                       / sizeof(nano3g_diagnostic_chips[0]);
+
+    if (id_len < 8)
+        return NULL;
+    /* Reject an absent/floating bank (all 0x00, all 0xFF, or a zero maker
+     * byte) so it can never match a zero sentinel slot below. Mirrors
+     * nand-check-nano3g.c's nand_id_present(), inlined because that helper
+     * is static and this file also builds into the host FTL test. */
+    if (id_bytes[0] == 0x00 || id_bytes[0] == 0xFF)
+        return NULL;
+
+    for (i = 0; i < count; i++)
+    {
+        const struct nand_diagnostic_chip *c =
+            &nano3g_diagnostic_chips[i];
+        if (c->blocks_per_bank == 0)
+            continue; /* sentinel / empty slot, never a real match */
+        if (memcmp(c->id, id_bytes, sizeof(c->id)) == 0)
+            return c;
+    }
+    return NULL;
+}
 
 /* Returns the matching table row, or NULL if none of the entries above
  * match this exact maker/device/ext-id triple. */
@@ -320,6 +420,24 @@ void nand_vendor_decode(const uint8_t *id_bytes, unsigned int id_len,
              * trusted". */
             geo_out->recognized = true;
             geo_out->blocks_per_bank = v->blocks_per_bank;
+            /* Carried out to nand_scan_banks(), which knows the real bank
+             * count and withdraws ->recognized if this row was validated
+             * only in a package with a specific number of chip enables. */
+            geo_out->expected_banks = v->expected_banks;
+        }
+        else
+        {
+            const struct nand_diagnostic_chip *d =
+                find_diagnostic_chip(id_bytes, id_len);
+            if (d)
+            {
+                /* This is deliberately not a validated-chip match. It
+                 * supplies only the read-only diagnostic geometry hint;
+                 * recognized remains false, so nand_scan_banks() and the
+                 * normal FTL/flasher cannot use this part for writes. */
+                geo_out->blocks_per_bank = d->blocks_per_bank;
+                geo_out->diagnostic_capacity_hint = true;
+            }
         }
     }
 }

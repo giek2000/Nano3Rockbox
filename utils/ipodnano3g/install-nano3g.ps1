@@ -170,7 +170,15 @@ function Get-DfuState {
     # Returns the numeric DFU state, or $null if no device / unparseable.
     # 2 = dfuIDLE (what a download needs). 9 = dfuERROR, which is what a
     # previous wInd3x "Haxed DFU" session leaves behind.
-    $out = & $script:Mks5l --dfuscan 2>&1 | Out-String
+    # mks5lboot prints its version banner to stderr. Under the script's
+    # $ErrorActionPreference='Stop', PowerShell would otherwise treat that
+    # stderr text as a terminating NativeCommandError and abort the whole
+    # install before this scan's output could be parsed. Capture it with a
+    # local Continue preference so the banner is just text, not a failure.
+    $out = & {
+        $ErrorActionPreference = 'Continue'
+        & $script:Mks5l --dfuscan 2>&1 | Out-String
+    }
     $out | Out-File $script:LogFile -Append -Encoding utf8
     if ($out -match 'DFU device state:\s*(\d+)') { return [int]$Matches[1] }
     return $null
@@ -194,7 +202,12 @@ function Wait-DfuIdle {
 function Send-Dfu {
     param([string] $File, [string] $What)
     Write-Log "Sending $What ..."
-    $out = & $script:Mks5l --dfusend $File 2>&1 | Out-String
+    # See Get-DfuState: shield the native command's stderr banner from the
+    # script-wide 'Stop' preference so it can't abort the send spuriously.
+    $out = & {
+        $ErrorActionPreference = 'Continue'
+        & $script:Mks5l --dfusend $File 2>&1 | Out-String
+    }
     $out | Out-File $script:LogFile -Append -Encoding utf8
     if ($out -notmatch 'sent successfully') { Fail "Failed to send ${What}: $out" }
     Write-Log "$What sent" 'OK'
@@ -379,8 +392,13 @@ try {
     if (-not (Wait-DfuIdle)) { Fail "Device did not reach stock DFU (state 2)." }
 
     $runDfu = Join-Path $env:TEMP 'nano3g-bl-run.dfu'
-    & $Mks5lboot --mkdfu-raw $Bootloader $runDfu 2>&1 |
-        Out-File $script:LogFile -Append -Encoding utf8
+    # Local Continue preference: mks5lboot's stderr banner must not trip the
+    # script-wide 'Stop' and abort before the image is built (see Get-DfuState).
+    & {
+        $ErrorActionPreference = 'Continue'
+        & $Mks5lboot --mkdfu-raw $Bootloader $runDfu 2>&1 |
+            Out-File $script:LogFile -Append -Encoding utf8
+    }
     if (-not (Test-Path $runDfu)) { Fail "Could not build the temporary bootloader DFU image." }
     Send-Dfu -File $runDfu -What 'temporary bootloader'
 
@@ -419,7 +437,13 @@ try {
             Fail "Device did not reach stock DFU. Nothing was written to NOR; the files are already installed, so re-run with -SkipFormat once it is in DFU."
         }
 
-        $out = & $Mks5lboot --bl-inst $BootloaderIpod 2>&1 | Out-String
+        # Local Continue preference: shield the stderr banner from the
+        # script-wide 'Stop' so a successful NOR write is not misread as a
+        # failure (see Get-DfuState).
+        $out = & {
+            $ErrorActionPreference = 'Continue'
+            & $Mks5lboot --bl-inst $BootloaderIpod 2>&1 | Out-String
+        }
         $out | Out-File $script:LogFile -Append -Encoding utf8
         if ($out -notmatch 'sent successfully') { Fail "NOR install failed: $out" }
         Write-Log "Installer sent. Listen to the iPod:" 'OK'

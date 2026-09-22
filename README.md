@@ -22,8 +22,8 @@ inside, which varies between units (capacity does not decide it). The app has a
 **"Check my iPod (safe)"** button that reads the chip and tells you — it never
 writes anything, so it is safe to run on any unit.
 
-Chips validated so far (Samsung, Hynix and Toshiba units, across both 4 GB and
-8 GB) are listed under [Devices used](NANO3G_TEST_UNITS.md).
+Chips validated so far (Micronas, Hynix, Toshiba and Intel units, across both
+4 GB and 8 GB) are listed under [Devices used](NANO3G_TEST_UNITS.md).
 
 ---
 

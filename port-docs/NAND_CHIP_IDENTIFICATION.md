@@ -98,8 +98,16 @@ in the usual vendor convention:
 
 | Device ID | Density/die | Unit example | Page | Blocks/bank |
 |-----------|-------------|--------------|------|-------------|
-| `0xD5`    | 16 Gbit (2 GiB) | Samsung/Hynix/Toshiba 8 GB (4 dies) | 4096 B or 2048 B | 4096 (4 KB page) / 8192 (2 KB page) |
+| `0xD5`    | 16 Gbit (2 GiB) | Micronas/Hynix/Toshiba 8 GB (4 dies); Intel/Micronas 4 GB (2 dies) | 4096 B or 2048 B | 4096 (4 KB page) / 8192 (2 KB page) |
 | `0xD3`    | 8 Gbit (1 GiB)  | Hynix 4 GB (4 dies) | 2048 B | 4096 |
+
+The same 2 GiB/die `0xD5` part appears in both 4-die (8 GB) and 2-chip-enable
+(4 GB) packages: the Intel 4 GB (`A5D5D589`) and the Micronas 4 GB (`B614D5EC`,
+model MB245) are 2-CE versions of the same die used in the 4-die 8 GB units.
+Capacity therefore does not follow from the device ID alone; it depends on how
+many chip enables are populated, which the driver determines at runtime from
+the present-bank scan. (`EC` is JEDEC's Micronas code, historically mislabelled
+"Samsung" in this project; Samsung's real JEDEC ID is `0xCE`.)
 
 Blocks-per-bank then follows from density ÷ (page_size × pages_per_block). This
 is consistent with every part validated so far, but it is currently treated as

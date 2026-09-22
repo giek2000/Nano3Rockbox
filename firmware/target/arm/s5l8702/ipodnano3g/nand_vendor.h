@@ -13,7 +13,7 @@
  *
  *  - The JEDEC-assigned 8-bit manufacturer ID codes used by essentially
  *    every NAND flash vendor's READ ID byte 0 (JEP106, a JEDEC standard;
- *    the specific codes for Samsung/Toshiba/Hynix/Micron/Intel/SanDisk
+ *    the specific codes for Micronas/Toshiba/Hynix/Micron/Intel/SanDisk
  *    used below are well-known, widely published constants, not sourced
  *    from any single implementation).
  *  - The "extended ID" geometry decoding convention documented and
@@ -43,7 +43,11 @@
 enum nand_maker_id
 {
     NAND_MAKER_TOSHIBA  = 0x98,
-    NAND_MAKER_SAMSUNG  = 0xEC,
+    /* JEDEC ID 0xEC is Micronas (ITT Intermetall) per JEP106; historically
+     * mislabelled "Samsung" in this project (Samsung's real JEDEC ID is
+     * 0xCE). The 8GB reference unit (model MB253, raw ID EC D5 14 B6 ...)
+     * carries a Micronas-branded MLC die. */
+    NAND_MAKER_MICRONAS = 0xEC,
     NAND_MAKER_HYNIX    = 0xAD,
     NAND_MAKER_INTEL    = 0x89,
     NAND_MAKER_MICRON   = 0x2C,

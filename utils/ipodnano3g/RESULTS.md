@@ -42,3 +42,34 @@ implemented layout and recovery order follow the decoded Apple FTL/VFL
 process documented in `decode/APPLE-FTL-WRITE.md`; that correspondence is
 evidence for the implementation, not a substitute for destructive hardware
 fault testing.
+
+## Later per-chip hardware validations
+
+Each entry below is a distinct NAND part hardware-validated on its own unit
+(erase/program/read-back verified byte-for-byte, plus a multi-bank sweep) and
+promoted in `nand_vendor.c`'s `nano3g_validated_chips[]`. Per-unit provenance
+is in `NANO3G_TEST_UNITS.md`.
+
+- **Hynix `A555D5AD` (8GB, 4 CE, 2KiB), unit #2 (MB261).** `wsweep 16/16
+  passed`, data and spare byte-for-byte.
+- **Toshiba `BA94D598` (8GB->validated as 4GB-class 4KiB row), unit #3
+  (MB263).** `wsweep 16/16 passed`.
+- **Hynix `A514D3AD` (4GB, 4 CE, 2KiB), unit #4 (MA978).** `wsweep 16/16
+  passed`.
+- **Intel `A5D5D589` (4GB, 2 CE, 2KiB; Intel JS29F32G08FAMB2), unit #5
+  (MA978), validated 2026-09-22.** Bounded write test on both chip enables:
+  `wtest erase 0 write 0 read 2`, `wtest data 1 meta 1`, `wsweep 8/8 passed`,
+  `wisolate 3/3 map 0,1,-1,-1`, `wstatus passed` (8/8 not 16/16 because this is
+  a 2-CE part; both CEs read back their own salted pattern, confirming
+  independent dies). Full install validated end to end: formatted FAT32,
+  copied the `.rockbox` tree, patched NOR, rebooted into Rockbox, mounts
+  read-write, plays audio, and the volume survives a reboot. This is the
+  first non-4-die (2-chip-enable) package validated on the port.
+- **Micronas `B614D5EC` (4GB, 2 CE, 4KiB), unit #7 (MB245), validated
+  2026-09-22.** Bounded write test on both chip enables: `wtest erase 0 write 0
+  read 1`, `wtest data 1 meta 1`, `wsweep 8/8 passed`, `wisolate 3/3 map
+  0,1,-1,-1`, `wstatus passed` (8/8 because this is a 2-CE part; both CEs read
+  back their own salted pattern, confirming independent dies). This is the 2-CE
+  4 GB counterpart of the 4-die 8 GB Micronas reference part (unit #1, same die
+  and ext-ID `B614D5EC`); it mounts writable via that Micronas validated row,
+  which uses `expected_banks = 0` so both CE counts are accepted.

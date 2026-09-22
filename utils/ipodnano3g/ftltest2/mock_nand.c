@@ -16,7 +16,7 @@
 
 #define MAX_BANKS   NAND_MAX_BANKS
 /* Large enough for the biggest real geometry the FTL supports: the Hynix
- * 2KB-page 8GB-unit part is 8192 blocks/bank (twice the Samsung 4KB-page
+ * 2KB-page 8GB-unit part is 8192 blocks/bank (twice the Micronas 4KB-page
  * part's 4096), so a Hynix-geometry mount/GC test can be configured. The
  * per-block page arrays are still heap-allocated on demand in
  * mock_nand_configure(), so this only grows the static pointer table. */

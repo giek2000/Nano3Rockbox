@@ -36,14 +36,14 @@ which is why the archives matter.
 | `A514D3AD` | Hynix | 4GB | 4 | 2KiB | **validated** |
 | `A555D5AD` | Hynix | 8GB | 4 | 2KiB | **validated** |
 | `B614D5AD` | Hynix | 8GB | 4 | 4KiB | needed |
-| `B614D5EC` | Samsung | 4GB | 2 | 4KiB | reported, needs a check |
-| `B614D5EC` | Samsung | 8GB | 4 | 4KiB | needed |
-| `2555D5EC` | Samsung | 8GB | 4 | 2KiB | needed |
+| `B614D5EC` | Micronas | 4GB | 2 | 4KiB | **validated** |
+| `B614D5EC` | Micronas | 8GB | 4 | 4KiB | **validated** |
+| `2555D5EC` | Micronas | 8GB | 4 | 2KiB | needed |
 | `A585D598` | Toshiba | 4GB | 2 | 2KiB | needed |
 | `A585D598` | Toshiba | 8GB | 4 | 2KiB | needed |
 | `BA94D598` | Toshiba | 4GB | 2 | 4KiB | needed |
 | `BA94D598` | Toshiba | 8GB | 4 | 4KiB | needed |
-| `A5D5D589` | Intel | 4GB | 2 | 2KiB | reported, needs a check |
+| `A5D5D589` | Intel | 4GB | 2 | 2KiB | **validated** |
 | `A5D5D589` | Intel | 8GB | 4 | 2KiB | reported, needs a check |
 | `3E94D589` | Intel | 4GB | 2 | 4KiB | reported, needs a check |
 | `3ED5D789` | Intel | 8GB | 2 | 4KiB | needed |
@@ -55,8 +55,10 @@ which is why the archives matter.
 "Reported" means someone has seen that chip in a unit, but no check archive
 has been collected from it yet. The id is the first four READ ID bytes read
 as one little-endian number: `A514D3AD` is the bytes `AD D3 14 A5`, and the
-last byte is the maker (`AD` Hynix, `EC` Samsung, `98` Toshiba, `89` Intel,
-`2C` Micron). When a chip is validated, its row in `nand_chip_table[]`
+last byte is the maker (`AD` Hynix, `EC` Micronas, `98` Toshiba, `89` Intel,
+`2C` Micron). (`EC` is JEDEC's Micronas/ITT Intermetall code, not Samsung --
+Samsung is `CE`; this project historically mislabelled it.) When a chip is
+validated, its row in `nand_chip_table[]`
 (`firmware/target/arm/s5l8702/ipodnano3g/nand-nano3g.c`) and this table
 are updated together.
 

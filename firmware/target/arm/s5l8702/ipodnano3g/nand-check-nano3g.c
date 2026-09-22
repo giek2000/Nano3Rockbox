@@ -213,13 +213,34 @@ static const struct nand_geometry *primary_geo;  /* bank 0, if usable */
  * or one whose bytes vary between reads). Filled by probe_all_bank_ids().
  * Purely diagnostic -- it never feeds the FTL's write gating. */
 static uint8_t  bank_rawid[NAND_MAX_BANKS][8];
-static int      bank_rawid_present[NAND_MAX_BANKS];  /* a read succeeded */
-static int      bank_rawid_stable[NAND_MAX_BANKS];   /* reads agreed */
+static int      bank_rawid_present[NAND_MAX_BANKS];  /* plausible stable ID */
+static int      bank_rawid_stable[NAND_MAX_BANKS];   /* successful reads agreed */
+static unsigned int bank_rawid_successes[NAND_MAX_BANKS];
+static unsigned int bank_present_mask;
+static unsigned int bank_stable_mask;
+static unsigned int physical_bank_mask;
+
+static bool nand_id_present(const uint8_t *id)
+{
+    unsigned int i;
+    bool all_zero = true, all_ff = true;
+
+    for (i = 0; i < 8; i++)
+    {
+        if (id[i] != 0x00) all_zero = false;
+        if (id[i] != 0xff) all_ff = false;
+    }
+    return !all_zero && !all_ff && id[0] != 0x00 && id[0] != 0xff;
+}
 
 static uint8_t row_spares[NAND_MAX_BANKS][SECTOR_SIZE] NAND_DMA_BUF_ATTR;
 static uint32_t row_block = 0xffffffff;
 
 static uint8_t page_buf[NAND_MAX_PAGE_SIZE] NAND_DMA_BUF_ATTR;
+static uint8_t alias_buf_a[NAND_MAX_PAGE_SIZE] NAND_DMA_BUF_ATTR;
+static uint8_t alias_buf_b[NAND_MAX_PAGE_SIZE] NAND_DMA_BUF_ATTR;
+static uint8_t alias_spare_a[NAND_MAX_SPARE_SIZE] NAND_DMA_BUF_ATTR;
+static uint8_t alias_spare_b[NAND_MAX_SPARE_SIZE] NAND_DMA_BUF_ATTR;
 static uint32_t page_cached = 0xffffffff;
 static uint32_t page_cached_bank = 0xffffffff;
 
@@ -249,41 +270,174 @@ static unsigned int diagbanks_seen = 1;
 static void probe_all_bank_ids(void)
 {
     unsigned int bank;
-    int attempt, i;
+    int attempt;
 
+    bank_present_mask = 0;
+    bank_stable_mask = 0;
     for (bank = 0; bank < NAND_MAX_BANKS; bank++)
     {
         uint8_t first[8] = { 0 };
+        bool have_first = false;
+
         bank_rawid_present[bank] = 0;
         bank_rawid_stable[bank] = 1;
+        bank_rawid_successes[bank] = 0;
         memset(bank_rawid[bank], 0, 8);
 
         for (attempt = 0; attempt < 4; attempt++)
         {
             uint8_t tmp[8] = { 0 };
-            if (nand_hw_reset(bank) != 0)
+            if (nand_hw_reset(bank) != 0
+                || nand_hw_read_id(bank, tmp, sizeof(tmp)) != 0)
                 continue;
-            if (nand_hw_read_id(bank, tmp, sizeof(tmp)) != 0)
-                continue;
-            if (!bank_rawid_present[bank])
+
+            bank_rawid_successes[bank]++;
+            if (!have_first)
             {
                 memcpy(first, tmp, sizeof(tmp));
                 memcpy(bank_rawid[bank], tmp, sizeof(tmp));
-                bank_rawid_present[bank] = 1;
-                continue;
+                have_first = true;
             }
-            if (memcmp(tmp, first, sizeof(tmp)) != 0)
+            else if (memcmp(tmp, first, sizeof(tmp)) != 0)
             {
-                int cur_zero = 1, have_zero = 1;
                 bank_rawid_stable[bank] = 0;
-                for (i = 0; i < 8; i++)
-                {
-                    if (tmp[i]) cur_zero = 0;
-                    if (bank_rawid[bank][i]) have_zero = 0;
-                }
-                if (have_zero && !cur_zero)
+                if (!nand_id_present(bank_rawid[bank])
+                    && nand_id_present(tmp))
                     memcpy(bank_rawid[bank], tmp, sizeof(tmp));
             }
+        }
+
+        bank_rawid_present[bank] = bank_rawid_successes[bank] >= 2
+                                && bank_rawid_stable[bank]
+                                && nand_id_present(bank_rawid[bank]);
+        if (bank_rawid_present[bank])
+            bank_present_mask |= 1u << bank;
+        if (bank_rawid_successes[bank] >= 2 && bank_rawid_stable[bank])
+            bank_stable_mask |= 1u << bank;
+    }
+
+    /* Destructive diagnostics may use only CEs with repeated, stable IDs
+     * that exactly match CE0. Keep all plausible CEs in the read-only report,
+     * but never write through an ambiguous or mixed-ID chip select. */
+    physical_bank_mask = 0;
+    if (bank_rawid_present[0])
+    {
+        for (bank = 0; bank < NAND_MAX_BANKS; bank++)
+        {
+            if (bank_rawid_present[bank]
+                && memcmp(bank_rawid[bank], bank_rawid[0], 8) == 0)
+                physical_bank_mask |= 1u << bank;
+        }
+    }
+}
+
+unsigned int nand_check_physical_bank_mask(void)
+{
+    return physical_bank_mask;
+}
+
+/* Compare a few readable page fingerprints after applying likely high row
+ * address bits. The raw equality counts are diagnostic only: out-of-range
+ * NAND behavior is not specified, and neither equality nor inequality at a
+ * span establishes the device's capacity. */
+static void append_alias_evidence(void)
+{
+    static const uint32_t spans[] = { 4096, 8192, 16384 };
+    static const uint32_t anchors[] = { 0, 1, 127 };
+    unsigned int bank, si, ai;
+
+    for (bank = 0; bank < NAND_MAX_BANKS; bank++)
+    {
+        const struct nand_geometry *g;
+
+        if (!bank_rawid_present[bank])
+            continue;
+        g = nand_check_bank_geometry(bank);
+        if (!g || g->page_size == 0 || g->pages_per_block == 0)
+            continue;
+
+        report_len += snprintf(report_text + report_len,
+                               sizeof(report_text) - report_len,
+                               "alias%u", bank);
+        for (si = 0; si < sizeof(spans) / sizeof(spans[0]); si++)
+        {
+            unsigned int equal = 0, valid = 0;
+            for (ai = 0; ai < sizeof(anchors) / sizeof(anchors[0]); ai++)
+            {
+                uint32_t base = anchors[ai];
+                uint32_t other = spans[si] * g->pages_per_block + base;
+                int rc_a = nand_hw_read_page(bank, base,
+                                             alias_buf_a, alias_spare_a);
+                int rc_b = nand_hw_read_page(bank, other,
+                                             alias_buf_b, alias_spare_b);
+
+                if (rc_a < 0 || rc_b < 0)
+                    continue;
+                /* Two erased pages are uninformative and are not counted. */
+                if (rc_a == NAND_ECC_CLEAN && rc_b == NAND_ECC_CLEAN)
+                    continue;
+                valid++;
+                if (memcmp(alias_buf_a, alias_buf_b, g->page_size) == 0
+                    && memcmp(alias_spare_a, alias_spare_b,
+                              NAND_CHECK_SPARE_BYTES) == 0)
+                    equal++;
+            }
+            report_len += snprintf(report_text + report_len,
+                                   sizeof(report_text) - report_len,
+                                   " %lu:%u/%u",
+                                   (unsigned long)spans[si], equal, valid);
+        }
+        report_len += snprintf(report_text + report_len,
+                               sizeof(report_text) - report_len, "\n");
+    }
+
+    /* Distinguish separate dies from two chip-selects exposing the same die.
+     * Compare representative non-erased pages on every present pair. */
+    for (bank = 0; bank < NAND_MAX_BANKS; bank++)
+    {
+        unsigned int other;
+        const struct nand_geometry *ga;
+
+        if (!bank_rawid_present[bank])
+            continue;
+        ga = nand_check_bank_geometry(bank);
+        if (!ga || ga->page_size == 0)
+            continue;
+        for (other = bank + 1; other < NAND_MAX_BANKS; other++)
+        {
+            const struct nand_geometry *gb;
+            unsigned int equal = 0, valid = 0;
+
+            if (!bank_rawid_present[other])
+                continue;
+            gb = nand_check_bank_geometry(other);
+            if (!gb || gb->page_size != ga->page_size
+                || gb->pages_per_block != ga->pages_per_block)
+                continue;
+            for (ai = 0; ai < sizeof(anchors) / sizeof(anchors[0]); ai++)
+            {
+                uint32_t page = anchors[ai];
+                int rc_a = nand_hw_read_page(bank, page,
+                                             alias_buf_a, alias_spare_a);
+                int rc_b = nand_hw_read_page(other, page,
+                                             alias_buf_b, alias_spare_b);
+                if (rc_a < 0 || rc_b < 0)
+                    continue;
+                if (rc_a == NAND_ECC_CLEAN && rc_b == NAND_ECC_CLEAN)
+                    continue;
+                valid++;
+                if (memcmp(alias_buf_a, alias_buf_b, ga->page_size) == 0
+                    && memcmp(alias_spare_a, alias_spare_b,
+                              NAND_CHECK_SPARE_BYTES) == 0)
+                    equal++;
+            }
+            /* Equal factory content is only content-equivalence evidence.
+             * It must never collapse physical banks: independently written
+             * per-CE patterns provide the authoritative topology test. */
+            report_len += snprintf(report_text + report_len,
+                                   sizeof(report_text) - report_len,
+                                   "bankalias %u:%u %u/%u\n",
+                                   bank, other, equal, valid);
         }
     }
 }
@@ -342,24 +496,18 @@ void nand_check_init(int rc)
              * (diagbanks_seen/diagbank_ids below) for identification
              * only; extending the dump itself to cover other banks is
              * a separate, not-yet-done piece of work. */
-            for (bank = 1; bank < NAND_MAX_BANKS; bank++)
+            diagbanks_seen = 0;
+            for (bank = 0; bank < NAND_MAX_BANKS; bank++)
             {
-                uint8_t id[8];
+                const uint8_t *id = bank_rawid[bank];
 
-                if (nand_hw_reset(bank) != 0
-                    || nand_hw_read_id(bank, id, sizeof(id)) != 0)
-                    break;
+                if (!bank_rawid_present[bank])
+                    continue;
                 bank_ids[bank][1] = ((uint32_t)id[0]) | ((uint32_t)id[1] << 8)
                                    | ((uint32_t)id[2] << 16)
                                    | ((uint32_t)id[3] << 24);
-                /* Record real decoded geometry for this bank too (not
-                 * just its raw ID), so a later diagnostic that looks at
-                 * more than one bank (e.g. nand_check_write_test_sweep())
-                 * has something real to work with instead of every
-                 * bank past 0 reading as page_size == 0. Still purely
-                 * diagnostic -- see that function's own comment. */
-                nand_check_decode_bank_geometry(bank, id, sizeof(id));
-                diagbanks_seen = bank + 1;
+                nand_check_decode_bank_geometry(bank, id, 8);
+                diagbanks_seen++;
             }
         }
     }
@@ -373,14 +521,20 @@ void nand_check_init(int rc)
 
     report_len = snprintf(report_text, sizeof(report_text),
                  "nano3g-nandcheck 1\n"
+#ifdef NAND_CHECK_ALLOW_WRITE_TEST
+                 "payload_mode bounded-write-test\n"
+#else
+                 "payload_mode read-only\n"
+#endif
                  "version %s\n"
                  "banks %u\n"
                  "ids %08lx %08lx %08lx %08lx\n"
-                 "nand %d\n",
+                 "nand %d\n"
+                 "topology present %x stable %x\n",
                  rbversion, bank_count,
                  (unsigned long)bank_ids[0][0], (unsigned long)bank_ids[1][0],
                  (unsigned long)bank_ids[2][0], (unsigned long)bank_ids[3][0],
-                 rc);
+                 rc, bank_present_mask, bank_stable_mask);
 
     /* Full 8-byte READ ID for bank 0 (the "primary" chip-enable), from the
      * multi-read stability probe. Reported even when it is all-zero: a
@@ -404,9 +558,10 @@ void nand_check_init(int rc)
         const uint8_t *r = bank_rawid[bank];
         report_len += snprintf(report_text + report_len,
                      sizeof(report_text) - report_len,
-                     "rawid%u %02x %02x %02x %02x %02x %02x %02x %02x present %d stable %d\n",
+                     "rawid%u %02x %02x %02x %02x %02x %02x %02x %02x present %d stable %d reads %u\n",
                      bank, r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7],
-                     bank_rawid_present[bank], bank_rawid_stable[bank]);
+                     bank_rawid_present[bank], bank_rawid_stable[bank],
+                     bank_rawid_successes[bank]);
     }
 
     if (!primary_geo)
@@ -452,9 +607,10 @@ void nand_check_init(int rc)
             const struct nand_probe_trace *t = nand_check_last_probe_trace();
             report_len += snprintf(report_text + report_len,
                          sizeof(report_text) - report_len,
-                         "probestop %d block %lu page %lu rc %d\n",
+                         "probestop %d block %lu page %lu rc %d hint %d\n",
                          t->stopped, (unsigned long)t->stop_block,
-                         (unsigned long)t->stop_page, t->stop_rc);
+                         (unsigned long)t->stop_page, t->stop_rc,
+                         t->used_capacity_hint);
             /* probestop 0 means the doubling phase ran to its cap
              * without any read ever failing -- on real hardware
              * against a chip this probe can't measure (confirmed: an
@@ -462,7 +618,7 @@ void nand_check_init(int rc)
              * pages instead of erroring), that means the `blocks`
              * figure above is not a real capacity, just "at least this
              * many" -- see probe_bank_capacity_blocks()'s comment. */
-            if (!t->stopped)
+            if (!t->stopped || t->used_capacity_hint)
                 report_len += snprintf(report_text + report_len,
                              sizeof(report_text) - report_len,
                              "blocks_unreliable 1\n");
@@ -482,6 +638,9 @@ void nand_check_init(int rc)
                          (unsigned long)bank_ids[3][1]);
         }
     }
+
+    /* Bounded read-only address-wrap evidence for every plausible bank. */
+    append_alias_evidence();
 
     report_len += snprintf(report_text + report_len,
              sizeof(report_text) - report_len,

@@ -261,7 +261,7 @@ static void nand_check_print(const char *report)
         "banks", "row", "mode", "pagesize", "sparesize", "blocks",
         "blocks_unreliable", "validated", "recognized", "diagonly", "ftl",
         "verdict", "model", "swvr", "rawid", "probestop", "diagbanks",
-        "wtest", "wsweep",
+        "wtest", "wsweep", "wstatus", "wloc", "wisolate",
 #ifdef FTL_APPLE_COMPAT
         /* Apple-compat read-only mount diagnostic (see ftl-apple-nano3g.c
          * and nand-check-nano3g.c's FTL_APPLE_COMPAT block). Shown on the
@@ -444,16 +444,14 @@ static void nand_check(void)
  * see NANO3G_ORIGINAL_NAND_FTL.md) capacity. */
 #define NAND_CHECK_ALLOW_WRITE_TEST_BLOCK  8
 #endif
-    /* Real erase+program+read-back test against one specific block of an
-     * unrecognised chip -- destroys that block's prior contents. Off by
-     * default (a normal -DNAND_CHECK build does not define this): must
-     * be explicitly enabled at build time, and even then only runs if
-     * the user holds SELECT for a couple seconds right here, so nobody
-     * hits it by accident from the plain identify-only check flow. See
-     * nand_check_write_test()'s own comment for exactly what it does
-     * and does not touch. */
-    printf("Press+hold SELECT to write-test");
-    printf("(destroys one block!) else wait");
+    /* Real erase+program+read-back diagnostics for an unrecognised chip.
+     * The first test destroys block 8 on CE0; if it passes, the bounded sweep
+     * destroys block 16 and three midpoint-adjacent blocks on every repeatedly
+     * identified matching CE. Off by default (a normal -DNAND_CHECK build
+     * does not define this), explicitly enabled at build time, and gated by
+     * a continuous SELECT hold plus the repeated full-ID CE mask. */
+    printf("DESTRUCTIVE: CE0 block 8");
+    printf("Each CE: 16, mid-1,mid,mid+1");
     {
         /* Two separate windows, not one: first give the user generous time
          * to press SELECT at all -- with a VISIBLE per-second countdown so
@@ -520,6 +518,18 @@ static void nand_check(void)
             printf("no write-test; identify only");
         }
 
+        if (!held_through)
+        {
+            nand_check_note(pressed ? "wstatus cancelled_release"
+                                    : "wstatus skipped_timeout");
+        }
+        if (held_through
+            && !(nand_check_physical_bank_mask()
+                 & (1u << NAND_CHECK_ALLOW_WRITE_TEST_BANK)))
+        {
+            nand_check_note("wstatus ineligible_id");
+            held_through = false;
+        }
         if (held_through)
         {
             const struct nand_write_test_result *r =
@@ -528,8 +538,8 @@ static void nand_check(void)
             snprintf(line, sizeof(line), "wtest erase %d write %d read %d",
                      r->erase_rc, r->write_rc, r->read_rc);
             nand_check_note(line);
-            snprintf(line, sizeof(line), "wtest data %d meta %d",
-                     r->data_match, r->meta_match);
+            snprintf(line, sizeof(line), "wtest data %d meta %d salt %02x",
+                     r->data_match, r->meta_match, r->pattern_salt);
             nand_check_note(line);
 
             /* The single-block result above passing doesn't say much
@@ -545,11 +555,47 @@ static void nand_check(void)
             {
                 const struct nand_write_sweep_result *s =
                     nand_check_write_test_sweep();
+                snprintf(line, sizeof(line),
+                         "wsweep plan %x %lu %lu %lu %lu",
+                         s->bank_mask,
+                         (unsigned long)s->test_blocks[0],
+                         (unsigned long)s->test_blocks[1],
+                         (unsigned long)s->test_blocks[2],
+                         (unsigned long)s->test_blocks[3]);
+                nand_check_note(line);
+                {
+                    unsigned int pi;
+                    for (pi = 0; pi < s->preflight_count; pi++)
+                    {
+                        const struct nand_write_preflight *p = &s->preflight[pi];
+                        snprintf(line, sizeof(line),
+                                 "wpre b%u k%lu r%d,%d m%02x%02x/%02x%02x",
+                                 p->bank, (unsigned long)p->block,
+                                 p->first_page_rc, p->second_page_rc,
+                                 p->first_meta_prefix[0], p->first_meta_prefix[1],
+                                 p->second_meta_prefix[0], p->second_meta_prefix[1]);
+                        nand_check_note(line);
+                    }
+                }
                 snprintf(line, sizeof(line), "wsweep %u/%u passed",
                          s->passed, s->attempted);
                 nand_check_note(line);
-                if (s->passed < s->attempted)
+                snprintf(line, sizeof(line),
+                         "wisolate %x/%x map %d,%d,%d,%d",
+                         s->isolation_preserved_mask,
+                         s->isolation_tested_mask,
+                         s->isolation_source[0], s->isolation_source[1],
+                         s->isolation_source[2], s->isolation_source[3]);
+                nand_check_note(line);
                 {
+                    unsigned int expected = s->block_count
+                        * ((s->bank_mask & 1u ? 1u : 0u)
+                         + (s->bank_mask & 2u ? 1u : 0u)
+                         + (s->bank_mask & 4u ? 1u : 0u)
+                         + (s->bank_mask & 8u ? 1u : 0u));
+                    if (s->passed < s->attempted)
+                    {
+                        nand_check_note("wstatus failed");
                     snprintf(line, sizeof(line),
                              "wsweep fail bank %u block %lu",
                              s->fail_bank, (unsigned long)s->fail_block);
@@ -559,7 +605,40 @@ static void nand_check(void)
                              s->fail_result.erase_rc, s->fail_result.write_rc,
                              s->fail_result.read_rc);
                     nand_check_note(line);
+                    snprintf(line, sizeof(line),
+                             "wsweep match data %d meta %d salt %02x",
+                             s->fail_result.data_match,
+                             s->fail_result.meta_match,
+                             s->fail_result.pattern_salt);
+                    nand_check_note(line);
+                    {
+                        unsigned int li;
+                        for (li = 0; li < s->fail_result.locator_count; li++)
+                        {
+                            snprintf(line, sizeof(line), "wloc %lu data %d meta %d",
+                                     (unsigned long)s->fail_result.locator_blocks[li],
+                                     s->fail_result.locator_data_match[li],
+                                     s->fail_result.locator_meta_match[li]);
+                            nand_check_note(line);
+                        }
+                    }
+                    }
+                    else if (s->attempted == 0 || s->bank_mask == 0
+                             || s->attempted != expected
+                             || s->isolation_tested_mask != s->bank_mask
+                             || s->isolation_preserved_mask != s->bank_mask)
+                    {
+                        nand_check_note("wstatus incomplete_coverage");
+                    }
+                    else
+                    {
+                        nand_check_note("wstatus passed");
+                    }
                 }
+            }
+            else
+            {
+                nand_check_note("wstatus single_failed");
             }
         }
     }

@@ -92,7 +92,21 @@ APP_ID = "org.rockbox.ipodnano3.installer"
 #   2.4.2  change Nano 3G Rockbox USB identity from Apple's retail 05AC:1262
 #          to Rockbox transport 05AC:127F; prevents iTunes' AppleIPod driver
 #          from binding and causing USBSTOR Code 10 on affected Windows PCs
-APP_VERSION = "2.4.2"
+#   2.4.5  promote two hardware-validated additions into the production
+#          installer (both first proven in the internal test installer):
+#            - Intel 4GB MA978 support: add "Apple Intel" to the disk allow-
+#              list, matching the validated 89/D5/D5/A5/68 row in nand_vendor.c
+#              (2-chip-enable package; the Intel unit's Rockbox FTL reports the
+#              disk as "Apple Intel"). No driver change is needed -- bootloader
+#              storage mode enumerates on the generic USBSTOR stack (05AC:127F),
+#              separate from the DFU 05AC:1223 WinUSB binding.
+#            - relabel JEDEC maker 0xEC "Samsung" -> "Micronas" (its real JEP106
+#              assignment; Samsung is 0xCE). The firmware's nand_vendor_name now
+#              returns "Micronas", so the 0xEC unit's disk product string is
+#              "Apple Micronas"; the disk allow-list entry and the check-report
+#              maker map were renamed to match.
+#          Ships with the rebuilt Micronas+Intel-labelled v2 bootloader payload.
+APP_VERSION = "2.4.5"
 # Optional FTL-variant tag, set at build time for the page-level v2 build so
 # the window title makes clear which FTL the payload installs (the on-flash
 # formats are incompatible, so this is worth surfacing). Empty for the default
@@ -141,10 +155,15 @@ LOG_STEP  = "#0b62d0"
 # unit running the Rockbox FTL shows up as "Apple <maker>". Which maker depends
 # on the NAND soldered into that particular unit. Measured on hardware:
 #
-#   Rockbox FTL (Samsung unit)  Apple Samsung   8321499136 B   4096 B sectors
+#   Rockbox FTL (Micronas unit) Apple Micronas  8321499136 B   4096 B sectors
 #   Rockbox FTL (Hynix unit)    Apple Hynix     8256000000 B   4096 B sectors
 #   Rockbox FTL (Toshiba unit)  Apple Toshiba   ~2GiB*4 die    4096 B sectors
+#   Rockbox FTL (Intel unit)    Apple Intel     2GiB*2 CE      2048 B sectors
 #   Apple's OS (any unit)       Apple iPod      7952142336 B   4096 B sectors  MBR
+#
+# ("Micronas" is JEDEC maker 0xEC; historically labelled "Samsung" here --
+# Samsung's real JEDEC ID is 0xCE. The firmware now reports the 0xEC part as
+# "Micronas", so its disk product string is "Apple Micronas".)
 #
 # The name is the *only* usable discriminator (sector size is identical across
 # all three, and every size falls inside the safety range below). So this is an
@@ -156,7 +175,7 @@ LOG_STEP  = "#0b62d0"
 # rockbox.ipod: File not found"). Each name here corresponds to a validated
 # chip in nand_vendor.c's nano3g_validated_chips[]; add a maker here only when
 # its chip has been hardware-validated and added there too.
-DISK_NAMES = ("Apple Samsung", "Apple Hynix", "Apple Toshiba")
+DISK_NAMES = ("Apple Micronas", "Apple Hynix", "Apple Toshiba", "Apple Intel")
 DISK_BUS = "USB"
 DISK_MIN = 1 * 1024**3
 DISK_MAX = 20 * 1024**3
@@ -958,7 +977,7 @@ $p = Get-Partition -DiskNumber $n -PartitionNumber $p.PartitionNumber
     # JEDEC NAND manufacturer codes, mirroring nand_vendor.c so the check
     # report can name the maker without the device having to.
     _MAKERS = {
-        0x98: "Toshiba", 0xEC: "Samsung", 0xAD: "Hynix",
+        0x98: "Toshiba", 0xEC: "Micronas", 0xAD: "Hynix",
         0x89: "Intel", 0x2C: "Micron", 0x45: "SanDisk", 0x20: "ST Micro",
     }
 
