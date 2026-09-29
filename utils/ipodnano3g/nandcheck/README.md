@@ -7,6 +7,12 @@ collects what we need to validate your chip. It **changes nothing on your
 iPod**: nothing is installed, and nothing is written to its NAND. The image
 runs from RAM and is gone when the iPod restarts.
 
+The read-only checker and the exact hardware-tested MB249 update files are
+bundled in the
+[v2.4.5 MB249 fast-boot pre-release](https://github.com/Kryst-0/Nano3Rockbox/releases/tag/v2.4.5-mb249-fastboot).
+The release restriction does not replace this check: confirm the complete ID
+and bank count on every device before installing.
+
 ## Which chip is in your iPod
 
 Every Nano 3G is model A1236, whichever NAND it has, so the chip has to be
@@ -26,10 +32,11 @@ the iPod. Otherwise please carry on with steps 3 and 4.
 
 These are all the chips Apple's firmware (1.1.3) supports. Apple picks the
 row by the id and the number of chip enables, so one id can appear twice.
-Rockbox supports every row, but writes only to validated ones; on the
-others the storage is read-only. Apart from the validated chip, that
-support has so far been tested only against simulated NAND on a computer,
-which is why the archives matter.
+Rockbox can identify every row, but writes only to validated configurations;
+on the others the storage is read-only. Some validated entries also require
+an exact eight-byte ID or a particular chip-enable count. See the central
+[compatibility table](../../../port-docs/CHIP_COMPATIBILITY.md) for the current
+write gates and the reasons for those restrictions.
 
 | id | maker | capacity | chip enables | page | status |
 |---|---|---|---|---|---|
@@ -40,9 +47,9 @@ which is why the archives matter.
 | `B614D5EC` | Micronas | 8GB | 4 | 4KiB | **validated** |
 | `2555D5EC` | Micronas | 8GB | 4 | 2KiB | needed |
 | `A585D598` | Toshiba | 4GB | 2 | 2KiB | needed |
-| `A585D598` | Toshiba | 8GB | 4 | 2KiB | needed |
+| `A585D598` | Toshiba | 8GB | 4 | 2KiB | **validated** (MB249, exact eight-byte ID) |
 | `BA94D598` | Toshiba | 4GB | 2 | 4KiB | needed |
-| `BA94D598` | Toshiba | 8GB | 4 | 4KiB | needed |
+| `BA94D598` | Toshiba | 8GB | 4 | 4KiB | **validated** (MB263) |
 | `A5D5D589` | Intel | 4GB | 2 | 2KiB | **validated** |
 | `A5D5D589` | Intel | 8GB | 4 | 2KiB | reported, needs a check |
 | `3E94D589` | Intel | 4GB | 2 | 4KiB | reported, needs a check |
@@ -52,15 +59,24 @@ which is why the archives matter.
 | `3E94D52C` | Micron | 4GB | 2 | 4KiB | needed |
 | `3ED5D72C` | Micron | 8GB | 2 | 4KiB | needed |
 
+The MB249 archive was captured before destructive validation. With the
+owner's authorization, `NAND_CHECK_ALLOW_WRITE_TEST` erased block 8 on bank
+0 and blocks 16, 4095, 4096 and 4097 on all four banks, then passed its
+write/readback tests (16/16 sweep, 4/4 bank isolation). A subsequent
+normal Rockbox bootloader loaded `rockbox.ipod` from a newly formatted
+FAT32 volume and started Rockbox on the MB249 device. Those 17 blocks
+previously contained user data. The archive does not contain their user
+page contents and cannot restore them.
+
 "Reported" means someone has seen that chip in a unit, but no check archive
 has been collected from it yet. The id is the first four READ ID bytes read
 as one little-endian number: `A514D3AD` is the bytes `AD D3 14 A5`, and the
 last byte is the maker (`AD` Hynix, `EC` Micronas, `98` Toshiba, `89` Intel,
 `2C` Micron). (`EC` is JEDEC's Micronas/ITT Intermetall code, not Samsung --
-Samsung is `CE`; this project historically mislabelled it.) When a chip is
-validated, its row in `nand_chip_table[]`
-(`firmware/target/arm/s5l8702/ipodnano3g/nand-nano3g.c`) and this table
-are updated together.
+Samsung is `CE`; this project historically mislabelled it.) The authoritative
+write gates are `nano3g_validated_chips[]` and the exact-ID table in
+`firmware/target/arm/s5l8702/ipodnano3g/nand_vendor.c`; this table and the
+central compatibility document must stay synchronized with them.
 
 ## What you need
 

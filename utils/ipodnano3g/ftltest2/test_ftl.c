@@ -652,6 +652,23 @@ static void test_validated_mlc_chip_override(void)
           "a same-maker/device Toshiba part with a different ext-id byte must "
           "NOT match the validated table -- only an exact triple counts");
 
+    /* MB249's complete eight-byte ID and four-bank topology are the
+     * validated combination. A different byte must remain unrecognized. */
+    {
+        uint8_t mb249[8] = {0x98, 0xD5, 0x85, 0xA5, 0xEA, 0x12, 0x02, 0x00};
+        nand_vendor_decode(mb249, 8, &geo);
+        CHECK(geo.recognized && !geo.diagnostic_capacity_hint &&
+              geo.expected_banks == 4,
+              "MB249 must require four banks for validated writes");
+        CHECK(geo.page_size == 2048 && geo.pages_per_block == 128 &&
+              geo.blocks_per_bank == 8192,
+              "MB249 must describe a 2GiB die");
+        mb249[7] = 1;
+        nand_vendor_decode(mb249, 8, &geo);
+        CHECK(!geo.recognized && !geo.diagnostic_capacity_hint,
+              "different full Toshiba ID must not inherit MB249 validation");
+    }
+
     /* An MLC part with no table match at all stays unrecognized, exactly
      * as before this feature existed. */
     id[0] = NAND_MAKER_HYNIX; id[1] = 0x00; id[2] = 0x14; id[3] = 0x00;
@@ -1053,6 +1070,117 @@ static void test_v2_hynix_scale_geometry_mounts(void)
 }
 #endif /* FTL_NANO3G_V2 */
 
+#ifndef FTL_NANO3G_V2
+static void test_lazy_mount_cost_and_first_access(void)
+{
+    uint8_t buf[NAND_PAGE_SIZE], out[NAND_PAGE_SIZE];
+    configure_small_chip();
+    CHECK(scan_then_mount() == 0, "mount blank chip");
+    for (unsigned int lb = 0; lb < 100; lb++)
+    {
+        fill_pattern(buf, sizeof(buf), lb);
+        CHECK(ftl_write(lb * 32, 1, buf) == 0, "populate logical blocks");
+    }
+    CHECK(ftl_sync() == 0, "commit population");
+    uint32_t before = mock_nand_read_count();
+    CHECK(scan_then_mount() == 0, "lazy remount");
+    uint32_t mount_reads = mock_nand_read_count() - before;
+    CHECK(mount_reads == 128, "mount reads exactly one page per physical block");
+    before = mock_nand_read_count();
+    CHECK(ftl_read(17 * 32, 1, out) == 0, "first access validates block");
+    CHECK(mock_nand_read_count() - before == 33, "first access validates only one block");
+    fill_pattern(buf, sizeof(buf), 17);
+    CHECK(memcmp(buf, out, sizeof(buf)) == 0, "validated data is correct");
+    before = mock_nand_read_count();
+    CHECK(ftl_read(17 * 32, 1, out) == 0, "repeat access");
+    CHECK(mock_nand_read_count() - before == 1, "validation is cached until remount");
+    printf("  lazy mount: %u page reads for 100 populated blocks (eager: 3328)\n",
+           mount_reads);
+}
+
+/* Exercise every torn commit position and consume the entire spare pool
+ * with unrelated writes before reading the affected logical block. */
+static void test_lazy_recovery_survives_unrelated_writes(void)
+{
+    uint8_t old[NAND_PAGE_SIZE], newer[NAND_PAGE_SIZE], out[NAND_PAGE_SIZE];
+    fill_pattern(old, sizeof(old), 11);
+    fill_pattern(newer, sizeof(newer), 22);
+    for (unsigned int cut = 1; cut <= 32; cut++)
+    {
+        configure_small_chip();
+        CHECK(scan_then_mount() == 0, "mount for power loss test");
+        CHECK(ftl_write(0, 1, old) == 0 && ftl_sync() == 0, "commit old copy");
+        CHECK(ftl_write(0, 1, newer) == 0, "stage replacement");
+        mock_nand_inject_power_loss_after(cut);
+        ftl_sync();
+        CHECK(cut == 32 || mock_nand_power_loss_triggered(), "power cut occurred");
+        mock_nand_clear_power_loss();
+        CHECK(scan_then_mount() == 0, "mount after power cut");
+        for (unsigned int lb = 1; lb < 124; lb++)
+            CHECK(ftl_write(lb * 32, 1, newer) == 0, "unrelated fill preserves fallback");
+        CHECK(ftl_sync() == 0, "fill flush succeeds");
+        CHECK(ftl_read(0, 1, out) == 0, "recover after unrelated writes");
+        CHECK(memcmp(out, old, sizeof(old)) == 0 ||
+              (cut == 32 && memcmp(out, newer, sizeof(newer)) == 0),
+              "no torn generation may be exposed");
+        /* A partial write must merge with the recovered generation. */
+        CHECK(ftl_write(1, 1, newer) == 0 && ftl_sync() == 0, "partial recovered write");
+        CHECK(scan_then_mount() == 0, "remount merged data");
+        CHECK(ftl_read(0, 1, out) == 0, "read preserved sector");
+        CHECK(memcmp(out, old, sizeof(old)) == 0 ||
+              (cut == 32 && memcmp(out, newer, sizeof(newer)) == 0),
+              "partial merge must preserve committed sector");
+    }
+    printf("  lazy recovery: exercised 31 torn commits and one complete commit\n");
+}
+
+static void test_lazy_recovery_pool_pressure(void)
+{
+    uint8_t old[NAND_PAGE_SIZE], newer[NAND_PAGE_SIZE], out[NAND_PAGE_SIZE];
+    configure_small_chip();
+    CHECK(scan_then_mount() == 0, "pool pressure mount");
+    fill_pattern(old, sizeof(old), 7);
+    fill_pattern(newer, sizeof(newer), 8);
+    for (unsigned int lb = 0; lb < 124; lb++)
+        CHECK(ftl_write(lb * 32, 1, old) == 0, "fill all logical blocks");
+    CHECK(ftl_sync() == 0, "flush full device");
+    for (unsigned int lb = 0; lb < 4; lb++)
+    {
+        CHECK(ftl_write(lb * 32, 1, newer) == 0, "stage torn replacement");
+        mock_nand_inject_power_loss_after(2);
+        CHECK(ftl_sync() != 0, "torn flush fails");
+        mock_nand_clear_power_loss();
+        CHECK(scan_then_mount() == 0, "retain torn candidates across reboot");
+    }
+    CHECK(ftl_write(10 * 32, 1, newer) == 0 && ftl_sync() == 0,
+          "empty free pool can reclaim only after candidate verification");
+    /* Write before reading: validation must also run in cache load. */
+    CHECK(ftl_write(3 * 32 + 1, 1, newer) == 0 && ftl_sync() == 0,
+          "first-access write recovers and merges");
+    CHECK(scan_then_mount() == 0, "mount after reclaim");
+    for (unsigned int lb = 0; lb < 4; lb++)
+    {
+        CHECK(ftl_read(lb * 32, 1, out) == 0, "read recovered data under pressure");
+        CHECK(memcmp(old, out, sizeof(old)) == 0, "fallback not erased by allocator");
+    }
+}
+
+static void test_lazy_no_valid_generation_fails(void)
+{
+    uint8_t buf[NAND_PAGE_SIZE], out[NAND_PAGE_SIZE];
+    configure_small_chip();
+    CHECK(scan_then_mount() == 0, "empty device mount");
+    fill_pattern(buf, sizeof(buf), 77);
+    CHECK(ftl_write(0, 1, buf) == 0, "stage first write");
+    mock_nand_inject_power_loss_after(2);
+    CHECK(ftl_sync() != 0, "first generation is torn");
+    mock_nand_clear_power_loss();
+    CHECK(scan_then_mount() == 0, "mount torn first generation");
+    CHECK(ftl_read(0, 1, out) != 0, "do not expose torn data or fake erased bytes");
+    CHECK(ftl_write(1, 1, buf) != 0, "do not merge a write with torn data");
+}
+#endif
+
 int main(void)
 {
     test_vendor_decode_public_ids();
@@ -1061,6 +1189,10 @@ int main(void)
     test_remount_persistence();
     test_repeated_overwrite_advances_generation();
 #ifndef FTL_NANO3G_V2
+    test_lazy_mount_cost_and_first_access();
+    test_lazy_recovery_survives_unrelated_writes();
+    test_lazy_recovery_pool_pressure();
+    test_lazy_no_valid_generation_fails();
     test_crash_during_rewrite_keeps_old_copy();
     test_cache_visible_but_not_durable_until_sync();
 #endif

@@ -1,5 +1,11 @@
 # Windows USB driver compatibility
 
+The published MB249 update package is available from the
+[v2.4.5 fast-boot pre-release](https://github.com/Kryst-0/Nano3Rockbox/releases/tag/v2.4.5-mb249-fastboot).
+It includes a RAM-only DFU bootloader and read-only checker; WinUSB applies to
+DFU (`05AC:1223`) only, while Rockbox storage (`05AC:127F`) keeps the normal
+Windows mass-storage driver.
+
 ## Problem
 
 The Nano 3G's retail Apple firmware identifies its USB device as `05AC:1262`. Earlier Rockbox Nano 3G builds reused that same USB vendor/product ID.

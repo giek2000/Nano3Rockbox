@@ -262,35 +262,35 @@ static const struct nand_validated_chip nano3g_validated_chips[] =
     { NAND_MAKER_INTEL, 0xD5, 0xA5, 8192, 2, "Intel 2-die MLC (4GB unit)" },
 };
 
-/* Diagnostic-only geometry hints for exact parts that have been identified
- * but have not yet passed the project's erase/program/read-back validation.
- * These entries deliberately do NOT set ->recognized and therefore cannot
- * make the normal FTL/flasher writable. They only provide a conservative
- * capacity hint to NAND_CHECK diagnostics; the hint remains marked
- * unvalidated in the report until hardware testing establishes it.
- *
- * The Intel part below is from model MA978, with stable ID bytes
- * 89 D5 D5 A5 68 00 00 00 on two chip enables. Current upstream
- * Rockbox, the exact-part controller database, and the 4 GiB package
- * arithmetic all agree on 8192 blocks per chip enable: 2048 bytes/page *
- * 128 pages/block * 8192 blocks = 2 GiB/CE, and two CEs = 4 GiB.
- * This remains a read-only geometry hint; it does not validate writes,
- * Apple VFL/remap handling, or the exact part's bad-block policy. */
+/* Full-ID chip entries. A validated entry may unlock the FTL only after
+ * nand_scan_banks() confirms its expected chip-enable count; a false entry
+ * supplies diagnostic capacity without permitting writes. This stricter
+ * match protects other Toshiba D5/A5 parts with different third or later
+ * ID bytes from inheriting MB249's hardware validation. */
 struct nand_diagnostic_chip
 {
     uint8_t id[8];
     unsigned int blocks_per_bank;
+    unsigned int expected_banks;
+    bool validated;
     const char *note;
 };
 
 static const struct nand_diagnostic_chip nano3g_diagnostic_chips[] =
 {
+    /* MB249 Toshiba 8GB: exact eight-byte ID, four distinct 2GiB CEs,
+     * 2KiB pages and 128 pages/block. Hardware erase/program/readback
+     * passed on all four CEs: wtest passed, wsweep 16/16, wisolate F/F.
+     * 2GiB / (2048 * 128) = 8192 blocks per CE. Only this complete ID
+     * and four-bank topology are writable; the 2-CE part is untested. */
+    { { 0x98, 0xD5, 0x85, 0xA5, 0xEA, 0x12, 0x02, 0x00 },
+      8192, 4, true, "Toshiba MB249 2GiB/CE validated" },
     /* Empty: the Intel JS29F32G08FAMB2 (89 D5 D5 A5 68, MA978 4GB) that
      * previously lived here as a read-only hint has been promoted to the
      * validated table above after passing the on-hardware write test and
      * sweep. New unverified exact parts can be listed here as read-only
      * diagnostic hints until they pass the same test. */
-    { { 0, 0, 0, 0, 0, 0, 0, 0 }, 0, NULL },
+    { { 0, 0, 0, 0, 0, 0, 0, 0 }, 0, 0, false, NULL },
 };
 
 static const struct nand_diagnostic_chip *
@@ -431,12 +431,14 @@ void nand_vendor_decode(const uint8_t *id_bytes, unsigned int id_len,
                 find_diagnostic_chip(id_bytes, id_len);
             if (d)
             {
-                /* This is deliberately not a validated-chip match. It
-                 * supplies only the read-only diagnostic geometry hint;
-                 * recognized remains false, so nand_scan_banks() and the
-                 * normal FTL/flasher cannot use this part for writes. */
+                /* Exact eight-byte ID match. Validated entries still
+                 * require the chip-enable count in nand_scan_banks() to
+                 * match before the FTL can write; unvalidated entries
+                 * remain capacity hints for read-only diagnostics. */
                 geo_out->blocks_per_bank = d->blocks_per_bank;
-                geo_out->diagnostic_capacity_hint = true;
+                geo_out->recognized = d->validated;
+                geo_out->expected_banks = d->expected_banks;
+                geo_out->diagnostic_capacity_hint = !d->validated;
             }
         }
     }

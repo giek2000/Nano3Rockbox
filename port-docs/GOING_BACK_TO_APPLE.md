@@ -2,6 +2,10 @@
 
 [← back to README](../README.md)
 
+The [v2.4.5 MB249 fast-boot pre-release](https://github.com/Kryst-0/Nano3Rockbox/releases/tag/v2.4.5-mb249-fastboot)
+is an update package only: it deliberately contains no NAND eraser and must not
+be used as the Apple-restore procedure described here.
+
 Installing Rockbox reformats the NAND into this port's own format, which is
 incompatible with Apple's. Apple's OS lives on the NAND (the NOR chip is only
 1 MB and holds just Apple's small bootloader), so installing Rockbox removes

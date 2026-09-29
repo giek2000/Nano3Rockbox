@@ -7,15 +7,29 @@ device:
   - iPod Classic 6G
   - iPod Nano 3G
 
+The hardware-tested MB249 firmware, temporary DFU image, permanent bootloader
+and exact checksums are published in the v2.4.5 MB249 fast-boot pre-release:
+https://github.com/Kryst-0/Nano3Rockbox/releases/tag/v2.4.5-mb249-fastboot
+The archive is an update package for an existing Nano3Rockbox-formatted unit,
+not a universal first-time installer.
+
 Nano 3G NAND support is limited to chips that have been validated on real
 hardware. Currently validated:
   - Hynix A514D3AD (4GB units)
-  - Samsung maker 0xEC / device 0xD5 / ext-id 0xB6, 4096-byte pages, MLC
-    (8GB units)
-The installer cannot identify the NAND while the device is in DFU mode; see
-the Rockbox manual's Nano 3G installation section before installing. Other
-configurations are still readable but are mounted read-only by the
-bootloader rather than enabled with untested geometry or programming modes.
+  - Hynix A555D5AD (8GB units)
+  - Micronas B614D5EC (4GB/two-CE and 8GB/four-CE units)
+  - Toshiba BA94D598 (8GB/four-CE units)
+  - Intel A5D5D589 (4GB/two-CE units only)
+  - Toshiba A585D598, exact ID 98 D5 85 A5 EA 12 02 00 (MB249 8GB,
+    four chip enables, 2048-byte pages)
+
+The Intel 8GB/four-CE package and the Toshiba A585D598 4GB/two-CE package are
+not covered by the similarly identified validated rows. The MB249 rule requires
+both the complete eight-byte ID and four chip enables. Run the safe NAND checker
+before installing and consult `port-docs/CHIP_COMPATIBILITY.md` for the current
+matrix. The installer cannot identify the NAND while the device is only in DFU
+mode; unsupported configurations remain readable but mount read-only rather
+than using untested geometry or programming modes.
 
 *** WARNING: DO NOT USE THE HOLD SWITCH / "ENTER OF" ON A NANO 3G WHOSE ***
 *** NAND HAS BEEN FORMATTED BY ROCKBOX. IT DESTROYS THE ROCKBOX FILES.  ***

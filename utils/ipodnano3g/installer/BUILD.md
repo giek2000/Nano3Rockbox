@@ -10,6 +10,10 @@ This directory contains the source for the standalone **FTL v2** Windows install
 - `icon.ico` — installer icon.
 - `CREDITS.md` — concise project credits.
 
+The published MB249 update archive, checksums and source patch are attached to
+the [v2.4.5 MB249 fast-boot pre-release](https://github.com/Kryst-0/Nano3Rockbox/releases/tag/v2.4.5-mb249-fastboot).
+It is separate from the self-contained first-time installer built here.
+
 ## Requirements
 
 Build on Windows with:

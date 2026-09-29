@@ -22,16 +22,39 @@ inside, which varies between units (capacity does not decide it). The app has a
 **"Check my iPod (safe)"** button that reads the chip and tells you — it never
 writes anything, so it is safe to run on any unit.
 
-Chips validated so far (Micronas, Hynix, Toshiba and Intel units, across both
-4 GB and 8 GB) are listed under [Devices used](NANO3G_TEST_UNITS.md).
+Validated configurations currently include specific Hynix, Micronas, Toshiba
+and Intel parts across 4 GB and 8 GB units. Some IDs are safe only with the
+tested chip-enable count, so do not decide from maker or capacity alone. See
+the [chip compatibility table](port-docs/CHIP_COMPATIBILITY.md) and always run
+the safe check before installing.
+
+### Toshiba MB249 and fast boot
+
+The Toshiba `98 D5 85 A5 EA 12 02 00` part used by an 8 GB MB249 unit has
+now been erase/program/read-back validated on all four chip enables. The FTL
+also verifies mapped blocks on first access instead of reading every populated
+page during every boot. On the hardware-tested unit with about 4 GB of music,
+startup dropped from roughly 20 minutes to roughly 20 seconds while retaining
+torn-write recovery. See [Fast boot and MB249 validation](port-docs/NANO3G_MB249_FAST_BOOT.md)
+for the design, tests, upgrade steps, rollback procedure and limitations.
+
+The hardware-tested files are published as the
+[v2.4.5 MB249 fast-boot pre-release](https://github.com/Kryst-0/Nano3Rockbox/releases/tag/v2.4.5-mb249-fastboot).
+That archive is an **update package for an existing Nano3Rockbox-formatted
+device**, not a universal first-time installer. Check the full NAND ID and
+four-chip-enable topology before using it.
 
 ---
 
-## Get the app
+## Downloads
 
-Download the latest installer from the
-[Releases page](../../releases), or build it yourself
-([instructions](port-docs/BUILDING.md)).
+The [Releases page](https://github.com/Kryst-0/Nano3Rockbox/releases) contains
+the published, checksum-identified downloads. The current hardware-tested
+MB249 package is
+[v2.4.5-mb249-fastboot](https://github.com/Kryst-0/Nano3Rockbox/releases/tag/v2.4.5-mb249-fastboot).
+For a new installation, build the Windows app yourself
+([instructions](port-docs/BUILDING.md)); the MB249 ZIP alone does not perform a
+first-time format or install.
 
 It is a single Windows program — nothing else to install. Right-click it and
 choose **Run as administrator** (it needs that to access the iPod's storage).
@@ -42,6 +65,21 @@ choose **Run as administrator** (it needs that to access the iPod's storage).
 
 The app has three buttons. It talks you through each step in its log window and
 waits for you, so you don't have to time anything by hand.
+
+Before starting:
+
+1. Back up all music and any other files on the iPod.
+2. Connect the iPod directly to the computer rather than through a USB hub.
+3. Close iTunes and iTunesHelper so they cannot take control during DFU.
+4. Run the installer as Administrator and use **Check my iPod (safe)** first.
+5. Install only when the checker reports the exact NAND identity and topology
+   as validated. A similar-looking chip ID is not sufficient.
+
+On Windows, DFU (`05AC:1223`) must be accessible to `mks5lboot`. If the app
+cannot open it, bind **WinUSB** to the DFU device with Zadig. Do not replace the
+normal Rockbox USB-storage driver: storage mode (`05AC:127F`) uses Windows' own
+USB mass-storage driver. See
+[Windows USB driver compatibility](port-docs/USB_DRIVER_COMPATIBILITY.md).
 
 ### 1. Check my iPod (safe)
 
@@ -58,6 +96,18 @@ into Rockbox.
 
 > This erases the iPod completely, including Apple's software. See the warning
 > at the top.
+
+### Updating an existing Nano3Rockbox installation
+
+Do not format or erase NAND merely to install the fast-boot build. If the iPod
+already uses Nano3Rockbox's on-flash format, update `.rockbox/rockbox.ipod` and
+`rockbox-info.txt`, safely unmount the volume, then test the matching bootloader
+as a RAM-only DFU image before installing it into NOR. The complete guarded
+procedure, commands, hashes and rollback steps are in
+[MB249 validation and fast boot](port-docs/NANO3G_MB249_FAST_BOOT.md#updating-an-existing-nano3rockbox-installation).
+
+Never use Rockbox Utility's iPod Classic target to install the firmware or
+bootloader; that compatibility applies only to themes and fonts.
 
 ### 3. Uninstall (restore Apple)
 
@@ -113,6 +163,8 @@ device.
 
 - [Devices used / supported chips](NANO3G_TEST_UNITS.md) — the exact iPod units
   and flash chips this port has been validated on.
+- [NAND compatibility table](port-docs/CHIP_COMPATIBILITY.md) — the concise
+  supported/unsupported matrix and the exact-ID/topology exceptions.
 - [How storage works (the FTL)](port-docs/FTL_DESIGN.md) — why a Nano 3G needs
   a flash translation layer, and how this one works.
 - [NAND chip identification](port-docs/NAND_CHIP_IDENTIFICATION.md) — why each

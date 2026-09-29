@@ -367,6 +367,9 @@ const struct nand_probe_trace *nand_check_last_probe_trace(void);
 void nand_check_init(int rc);
 const char *nand_check_report(void);
 void nand_check_note(const char *line);
+void nand_check_usb_stats(unsigned int *info, unsigned int *started,
+                          unsigned int *completed, unsigned int *events,
+                          unsigned int *sector);
 #endif
 
 #endif /* __NAND_TARGET_H__ */

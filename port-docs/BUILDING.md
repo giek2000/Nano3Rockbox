@@ -6,6 +6,12 @@ Most people do not need this — the [Windows app](../README.md#install-rockbox)
 ships everything prebuilt. This page is for developers who want to build the
 firmware, the tools, or the installer themselves.
 
+The reproducible hardware-tested MB249 binaries and their source patch are
+also bundled in the
+[v2.4.5 MB249 fast-boot pre-release](https://github.com/Kryst-0/Nano3Rockbox/releases/tag/v2.4.5-mb249-fastboot).
+Use that archive only for the exact validated hardware described in the
+compatibility matrix.
+
 ## Toolchain
 
 Requires an `arm-elf-eabi` toolchain, which Rockbox's own script installs:
@@ -55,5 +61,9 @@ make clean && make FTL=v2 && make check   # v2 FTL (what ships)
 
 Support for a chip is gated on hardware validation — see
 [the FTL design notes](FTL_DESIGN.md#which-chips-are-supported) and
-[Devices used](../NANO3G_TEST_UNITS.md) for the process and the chips validated
-so far.
+[the compatibility matrix](CHIP_COMPATIBILITY.md) for the current result, and
+[Devices used](../NANO3G_TEST_UNITS.md) for the per-unit evidence. When adding a
+validated part, keep the matrix, `utils/ipodnano3g/nandcheck/README.md`, and the
+write gates in `firmware/target/arm/s5l8702/ipodnano3g/nand_vendor.c`
+synchronized. Do not broaden a match from capacity or a partial ID when the
+validated package depends on an exact ID or chip-enable count.

@@ -51,9 +51,12 @@ after it has been erased, written, read back and verified byte-for-byte on real
 hardware. An unrecognised chip is still fully **readable**, but mounts
 **read-only** rather than risk writing to a part nobody has tested.
 
-The units validated so far, and the exact chip IDs, are listed in
-[Devices used](../NANO3G_TEST_UNITS.md). For *why* each chip has to be validated
-individually (and how Apple sidesteps that), see
+The concise support matrix is in [NAND compatibility](CHIP_COMPATIBILITY.md),
+with per-unit evidence in [Devices used](../NANO3G_TEST_UNITS.md). Matching the
+three-byte maker/device/ext ID is not always enough: the Intel row is restricted
+to the validated two-CE package, while MB249 requires its complete eight-byte ID
+and four CEs. For *why* each chip has to be validated individually (and how
+Apple sidesteps that), see
 [NAND chip identification](NAND_CHIP_IDENTIFICATION.md).
 
 ## Tested in software too

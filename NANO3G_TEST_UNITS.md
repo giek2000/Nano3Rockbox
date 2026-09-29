@@ -1,5 +1,12 @@
 # iPod Nano 3G test units used for NAND validation
 
+For a concise install-time summary, including configurations that deliberately
+remain read-only, see [NAND compatibility](port-docs/CHIP_COMPATIBILITY.md).
+
+The binaries validated on the MB249 unit are published with exact checksums in
+the [v2.4.5 MB249 fast-boot pre-release](https://github.com/Kryst-0/Nano3Rockbox/releases/tag/v2.4.5-mb249-fastboot).
+No NAND dump, music library or personal device data is included.
+
 This file records the physical iPod Nano 3G (N46 / S5L8702) units this project
 has used to hardware-validate NAND chips for the page-level FTL (v2). Each row
 in the validated-chip table in

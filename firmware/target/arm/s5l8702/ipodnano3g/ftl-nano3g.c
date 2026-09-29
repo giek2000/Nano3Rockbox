@@ -163,6 +163,15 @@ static bool     block_bad[FTL_MAX_PHYSICAL_BLOCKS];   /* by physical idx */
 static uint32_t free_list[FTL_MAX_PHYSICAL_BLOCKS];
 static unsigned int free_count;
 
+/* Keep older generations out of the free pool until their logical block
+ * has been verified. Otherwise an unrelated write could erase the only
+ * recoverable copy before the first read of a torn newer generation. */
+#define FTL_NO_CANDIDATE UINT16_MAX
+static uint16_t candidate_head[FTL_MAX_PHYSICAL_BLOCKS];
+static uint16_t candidate_next[FTL_MAX_PHYSICAL_BLOCKS];
+static bool block_verified[FTL_MAX_PHYSICAL_BLOCKS];
+static int ensure_block_verified(unsigned int logical);
+
 #define FTL_UNMAPPED  0xFFFFFFFFu
 
 static bool mounted;
@@ -234,7 +243,19 @@ static int allocate_free_block(uint32_t *phys_out)
     uint32_t best_erase = 0xFFFFFFFFu;
 
     if (free_count == 0)
-        return -1;
+    {
+        /* Reclaim superseded copies on demand, never by blindly erasing
+         * a still-needed recovery candidate. No NAND writes in validation. */
+        for (unsigned int lb = 0; lb < num_logical_blocks && free_count == 0; lb++)
+        {
+            uint16_t head = candidate_head[lb];
+            if (head != FTL_NO_CANDIDATE &&
+                candidate_next[head] != FTL_NO_CANDIDATE)
+                ensure_block_verified(lb);
+        }
+        if (free_count == 0)
+            return -1;
+    }
 
     /* Least-erased-first wear leveling among the current free list. This
      * is a simple, easily verified policy; it is not a claim of matching
@@ -288,10 +309,9 @@ static bool nand_read_page_untrusted(int rc)
  * We do not require re-reading every page of every block up front (that
  * would mean a full-device read on every boot); instead we verify a
  * candidate's remaining pages lazily on first read/write of that logical
- * block, and treat a verification failure as "this candidate is invalid,
- * fall back to unmapped" rather than trusting page 0 alone forever. This
+ * block, falling back to an older complete generation if necessary. This
  * keeps mount fast while still not blindly trusting a single header. */
-static bool verify_block_fully(uint32_t phys, uint32_t expect_logical,
+static int verify_block_fully(uint32_t phys, uint32_t expect_logical,
                                uint32_t expect_generation)
 {
     unsigned int bank, block, page;
@@ -307,19 +327,80 @@ static bool verify_block_fully(uint32_t phys, uint32_t expect_logical,
         int rc = nand_hw_read_page(bank, block * chip_geo->pages_per_block + page,
                                    data, spare);
         if (nand_read_page_untrusted(rc))
-            return false;
+            return -1; /* Transient I/O failure: retain candidates for retry. */
 
         memcpy(&hdr, spare, sizeof(hdr));
         if (hdr.magic != FTL_HEADER_MAGIC)
-            return false;
+            return 0;
         if (hdr.logical_block != expect_logical)
-            return false;
+            return 0;
         if (hdr.generation != expect_generation)
-            return false;
+            return 0;
         if (hdr.page_index != page)
-            return false;
+            return 0;
     }
-    return true;
+    return 1;
+}
+
+static int ensure_block_verified(unsigned int logical)
+{
+    uint32_t phys = block_map[logical];
+    uint32_t generation = block_generation[logical];
+    static uint8_t data[NAND_MAX_PAGE_SIZE] FTL_DMA_BUF_ATTR;
+    static uint8_t spare[NAND_MAX_SPARE_SIZE] FTL_DMA_BUF_ATTR;
+
+    if (block_verified[logical] || phys == FTL_UNMAPPED)
+        return 0;
+
+    for (;;)
+    {
+        int result = verify_block_fully(phys, logical, generation);
+        if (result < 0)
+            return -1;
+        if (result > 0)
+            break;
+
+        /* A structurally incomplete generation cannot be served. Find
+         * the next older candidate, retaining all copies until success. */
+        uint32_t best = FTL_UNMAPPED, best_generation = 0;
+        for (uint16_t p = candidate_head[logical]; p != FTL_NO_CANDIDATE;
+             p = candidate_next[p])
+        {
+            unsigned int bank, block;
+            struct ftl_page_header hdr;
+            phys_to_bank_block(p, &bank, &block);
+            int rc = nand_hw_read_page(bank, block * chip_geo->pages_per_block,
+                                       data, spare);
+            if (nand_read_page_untrusted(rc))
+                return -1;
+            memcpy(&hdr, spare, sizeof(hdr));
+            if (hdr.magic == FTL_HEADER_MAGIC && hdr.logical_block == logical &&
+                hdr.page_index == 0 && hdr.generation < generation &&
+                (best == FTL_UNMAPPED || hdr.generation > best_generation))
+            {
+                best = p;
+                best_generation = hdr.generation;
+            }
+        }
+        if (best == FTL_UNMAPPED)
+            return -1; /* Do not turn damaged user data into erased bytes. */
+        phys = best;
+        generation = best_generation;
+    }
+
+    block_map[logical] = phys;
+    block_generation[logical] = generation;
+    block_verified[logical] = true;
+    uint16_t p = candidate_head[logical];
+    candidate_head[logical] = FTL_NO_CANDIDATE;
+    while (p != FTL_NO_CANDIDATE)
+    {
+        uint16_t next = candidate_next[p];
+        if (p != phys)
+            release_free_block(p);
+        p = next;
+    }
+    return 0;
 }
 
 static int scan_and_mount(void)
@@ -342,6 +423,8 @@ static int scan_and_mount(void)
     {
         block_map[lb] = FTL_UNMAPPED;
         block_generation[lb] = 0;
+        candidate_head[lb] = FTL_NO_CANDIDATE;
+        block_verified[lb] = false;
     }
     free_count = 0;
 
@@ -393,118 +476,18 @@ static int scan_and_mount(void)
          * same as erase_count[] is already initialised to 0 for every
          * physical block just above this loop. */
 
-        if (hdr.generation > block_generation[hdr.logical_block])
+        candidate_next[phys] = candidate_head[hdr.logical_block];
+        candidate_head[hdr.logical_block] = (uint16_t)phys;
+        if (block_map[hdr.logical_block] == FTL_UNMAPPED ||
+            hdr.generation > block_generation[hdr.logical_block])
         {
-            uint32_t previous = block_map[hdr.logical_block];
             block_map[hdr.logical_block] = phys;
             block_generation[hdr.logical_block] = hdr.generation;
-            if (previous != FTL_UNMAPPED)
-                release_free_block(previous);
-        }
-        else
-        {
-            /* Superseded by a higher-generation copy already seen (or
-             * that we'll see later and reconcile via the branch above --
-             * see the fix-up pass below). Provisionally free; corrected
-             * below if this turns out to have been the higher one. */
-            release_free_block(phys);
         }
     }
 
-    /* The single pass above can release a block that later turns out to
-     * be the true highest-generation copy if blocks aren't scanned in a
-     * convenient order. Do a fix-up pass: remove from the free list any
-     * physical block that ended up as the winning mapping. */
-    for (unsigned int lb = 0; lb < num_logical_blocks; lb++)
-    {
-        uint32_t phys = block_map[lb];
-        if (phys == FTL_UNMAPPED)
-            continue;
-        for (unsigned int i = 0; i < free_count; i++)
-        {
-            if (free_list[i] == phys)
-            {
-                free_list[i] = free_list[--free_count];
-                break;
-            }
-        }
-    }
-
-    /* Full verification pass: page 0's header alone doesn't rule out a
-     * torn write leaving later pages of the "winning" candidate
-     * inconsistent -- most importantly, a power loss partway through
-     * rewrite_logical_block()'s per-page loop, after only a few of a
-     * fresh physical block's pages were programmed with a new, higher
-     * generation number than the still-fully-intact old copy of the same
-     * logical block. Page 0 of that fresh block looks valid in isolation
-     * (it's written first), so the single-highest-generation scan above
-     * picks it as the winner and demotes the still-good old copy to the
-     * free pool -- exactly the situation this pass must recover from. */
-    for (unsigned int lb = 0; lb < num_logical_blocks; lb++)
-    {
-        uint32_t phys = block_map[lb];
-        if (phys == FTL_UNMAPPED)
-            continue;
-        if (verify_block_fully(phys, lb, block_generation[lb]))
-            continue;
-
-        /* The winning candidate didn't hold up under full verification.
-         * Free it (it's a torn write, not a hardware fault, so it's safe
-         * to erase and reuse later) and fall back to the next-best
-         * candidate still sitting in the free pool: the highest-
-         * generation block that still declares this logical block and
-         * itself passes full verification. There should be at most one
-         * such fallback in practice (our write path never leaves more
-         * than one stale copy of a logical block unerased at a time),
-         * but we search for the best rather than assume that. */
-        release_free_block(phys);
-        block_map[lb] = FTL_UNMAPPED;
-        block_generation[lb] = 0;
-
-        uint32_t best_fallback = FTL_UNMAPPED;
-        uint32_t best_fallback_gen = 0;
-        unsigned int best_fallback_slot = 0;
-
-        for (unsigned int i = 0; i < free_count; i++)
-        {
-            uint32_t cand = free_list[i];
-            unsigned int cbank, cblock;
-            struct ftl_page_header chdr;
-            /* static: see mark_bad_best_effort()'s comment. */
-            static uint8_t cdata[NAND_MAX_PAGE_SIZE] FTL_DMA_BUF_ATTR;
-            static uint8_t cspare[NAND_MAX_SPARE_SIZE] FTL_DMA_BUF_ATTR;
-
-            if (cand == phys)
-                continue; /* this is the candidate that just failed verification */
-
-            phys_to_bank_block(cand, &cbank, &cblock);
-            if (nand_read_page_untrusted(nand_hw_read_page(cbank,
-                    cblock * chip_geo->pages_per_block, cdata, cspare)))
-                continue;
-            memcpy(&chdr, cspare, sizeof(chdr));
-            if (chdr.magic != FTL_HEADER_MAGIC || chdr.logical_block != lb ||
-                chdr.page_index != 0)
-                continue;
-            if (best_fallback == FTL_UNMAPPED || chdr.generation > best_fallback_gen)
-            {
-                best_fallback = cand;
-                best_fallback_gen = chdr.generation;
-                best_fallback_slot = i;
-            }
-        }
-
-        if (best_fallback != FTL_UNMAPPED &&
-            verify_block_fully(best_fallback, lb, best_fallback_gen))
-        {
-            block_map[lb] = best_fallback;
-            block_generation[lb] = best_fallback_gen;
-            free_list[best_fallback_slot] = free_list[--free_count];
-        }
-        /* Otherwise this logical block genuinely has no valid copy left
-         * (should only occur if the fallback itself was also corrupted,
-         * e.g. two overlapping faults) and stays unmapped, reading back
-         * as erased. */
-    }
+    /* Full verification is deferred until first access. Recovery candidates
+     * remain reserved until the winning generation has passed verification. */
 
     return 0;
 }
@@ -587,6 +570,9 @@ static int read_one_sector(uint32_t sector, void *buffer)
     static uint8_t data[NAND_MAX_PAGE_SIZE] FTL_DMA_BUF_ATTR;
 
     if (logical_block >= num_logical_blocks)
+        return -1;
+
+    if (ensure_block_verified(logical_block) != 0)
         return -1;
 
     phys = block_map[logical_block];
@@ -712,6 +698,9 @@ static int wb_load(unsigned int logical_block)
         return 0;
 
     if (wb_flush() != 0)
+        return -1;
+
+    if (ensure_block_verified(logical_block) != 0)
         return -1;
 
     phys = block_map[logical_block];

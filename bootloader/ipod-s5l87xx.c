@@ -658,6 +658,12 @@ static void nand_check(void)
     /* One USB session: usb_mode() starts power management each time, so it
      * must not run twice */
     usb_mode();
+    {
+        unsigned int info, started, completed, events, sector;
+        nand_check_usb_stats(&info, &started, &completed, &events, &sector);
+        printf("USB i%u r%u/%u e%u", info, started, completed, events);
+        printf("last LBA %u", sector);
+    }
     nand_check_light();
     printf("Done. Hold MENU+SELECT");
     printf("to restart");
@@ -1757,10 +1763,13 @@ void main(void)
                        i, pinfo.type, (unsigned long long)pinfo.size);
         }
 #if defined(IPOD_NANO3G) && defined(DEFAULT_VIRT_SECTOR_SIZE)
-        /* Nothing mounted: show USB hosts Apple's 4096-byte sectors, which
-         * its partition table counts in */
+        /* Nothing mounted: expose 4096-byte sectors for formatting. */
         disk_set_sector_multiplier(IF_MD(0,)
                                    DEFAULT_VIRT_SECTOR_SIZE / SECTOR_SIZE);
+#endif
+#if defined(IPOD_NANO3G) && defined(HAVE_BOOTLOADER_USB_MODE)
+        printf("USB mode for formatting");
+        usb_mode();
 #endif
         fatal_error(ERR_RB);
     }

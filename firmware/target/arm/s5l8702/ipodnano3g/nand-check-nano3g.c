@@ -509,6 +509,26 @@ void nand_check_init(int rc)
                 nand_check_decode_bank_geometry(bank, id, 8);
                 diagbanks_seen++;
             }
+            /* Include all four CEs in the read-only raw view only when
+             * their complete IDs and exact geometry hints match bank 0. */
+            if (diagbanks_seen == NAND_MAX_BANKS &&
+                primary_geo->diagnostic_capacity_hint)
+            {
+                bool same = true;
+                for (bank = 0; bank < NAND_MAX_BANKS; bank++)
+                {
+                    const struct nand_geometry *other =
+                        nand_check_bank_geometry(bank);
+                    if (!other || !other->diagnostic_capacity_hint ||
+                        other->blocks_per_bank != primary_geo->blocks_per_bank ||
+                        other->page_size != primary_geo->page_size ||
+                        other->pages_per_block != primary_geo->pages_per_block ||
+                        memcmp(bank_rawid[bank], bank_rawid[0], 8) != 0)
+                        same = false;
+                }
+                if (same)
+                    bank_count = NAND_MAX_BANKS;
+            }
         }
     }
 
@@ -517,6 +537,14 @@ void nand_check_init(int rc)
         const struct nand_geometry *g = nand_check_bank_geometry(bank);
         bank_ids[bank][0] = g ? ((uint32_t)g->maker_id
                                 | ((uint32_t)g->device_id << 8)) : 0;
+        /* The four-byte READ ID is the user-facing chip identity. */
+        if (bank_rawid_present[bank])
+        {
+            const uint8_t *id = bank_rawid[bank];
+            bank_ids[bank][0] = (uint32_t)id[0] | ((uint32_t)id[1] << 8)
+                              | ((uint32_t)id[2] << 16)
+                              | ((uint32_t)id[3] << 24);
+        }
     }
 
     report_len = snprintf(report_text, sizeof(report_text),
@@ -1192,12 +1220,24 @@ static void fill_sector(uint32_t sector, uint8_t *dst)
 }
 
 /* ---- Rockbox storage API: the check's read-only raw NAND ---- */
+static volatile unsigned int usb_info_calls, usb_reads_started;
+static volatile unsigned int usb_reads_completed, usb_event_calls, usb_last_sector;
+void nand_check_usb_stats(unsigned int *info, unsigned int *started,
+                          unsigned int *completed, unsigned int *events,
+                          unsigned int *sector)
+{
+    *info = usb_info_calls; *started = usb_reads_started;
+    *completed = usb_reads_completed; *events = usb_event_calls;
+    *sector = usb_last_sector;
+}
 
 int nand_read_sectors(IF_MD(int drive,) sector_t start, int incount,
                       void *inbuf)
 {
     IF_MD((void)drive);
     uint8_t *buf = inbuf;
+    usb_reads_started++;
+    usb_last_sector = (unsigned int)start;
 
     if ((uint64_t)start + incount > total_sector_count())
         return -1;
@@ -1207,6 +1247,7 @@ int nand_read_sectors(IF_MD(int drive,) sector_t start, int incount,
         buf += SECTOR_SIZE;
     }
     nand_spin();
+    usb_reads_completed++;
     return 0;
 }
 
@@ -1232,6 +1273,7 @@ int nand_event(long id, intptr_t data)
 {
     (void)id;
     (void)data;
+    usb_event_calls++;
     return 0;
 }
 
@@ -1239,6 +1281,7 @@ int nand_event(long id, intptr_t data)
 void nand_get_info(IF_MD(int drive,) struct storage_info *info)
 {
     IF_MD((void)drive);
+    usb_info_calls++;
     info->sector_size = SECTOR_SIZE;
     info->num_sectors = total_sector_count();
     info->vendor = "Rockbox";

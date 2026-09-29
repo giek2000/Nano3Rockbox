@@ -9,6 +9,11 @@ dependency.
 The application source is `nano3g_installer.py`. Its `APP_VERSION` is the
 single source of truth for the generated EXE version.
 
+Published downloads are listed on the
+[fork's Releases page](https://github.com/Kryst-0/Nano3Rockbox/releases).
+The `v2.4.5-mb249-fastboot` asset is a manual update package for an existing,
+already formatted MB249 installation; it is not this first-time installer.
+
 See:
 
 - [`BUILD.md`](BUILD.md) for prerequisites, payload staging, and exact build
